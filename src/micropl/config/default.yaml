@@ -1,0 +1,60 @@
+# Default configuration for MicroPL setup
+# User-editable non-volatile settings
+
+hardware:
+  # Thorlabs KDC101 (motorized polarizer / TTL shutter)
+  kdc101:
+    serial_number: "27500125"  # Replace with your device serial number
+    port: null
+    kinesis_path: "C:\\Program Files\\Thorlabs\\Kinesis"  # Path to Kinesis DLLs
+    # Motor parameters for unit conversions (default for PRM1-Z8 rotation mount)
+    steps_per_rev: 1919.64186
+    gbox_ratio: 1.0
+    pitch: 1.0
+    velocity: 10.0  # deg/s (note: set_velocity not fully implemented yet)
+    acceleration: 10.0  # deg/s²
+
+  # PM100 Power Meter
+  pm100:
+    port: null
+    wavelength: 532  # nm
+    range: auto
+
+  # FHR640 Horiba Spectrometer
+  fhr640:
+    port: null
+    grating: 600  # lines/mm
+    center_wavelength: 700  # nm
+    slit_width: 100  # µm
+
+  # Andor Cameras (DL604M, DU420, DU491, DU420A-BR-DD iDus)
+  andor_camera:
+    model: DU420A-BR-DD  # iDus 420A-BR-DD
+    camera_index: 0  # Camera index (0 = first camera)
+    exposure_time: 0.1  # seconds
+    temperature: -70  # °C (set during initialization)
+    fan_mode: on  # "on" or "off"
+    readout_mode: null  # null = use default, or specify amplifier mode index
+
+  # XY Stage
+  stage:
+    type: stub  # or actual driver when available
+    x_range: [0, 100]  # mm
+    y_range: [0, 100]  # mm
+    speed: 5.0  # mm/s
+
+acquisition:
+  default_integration_time: 1.0  # seconds
+  default_averaging: 1
+  autosave: true
+  data_directory: ./data
+
+calibration:
+  power_calibration_points: 10
+  alignment_tolerance: 0.01  # mm
+  wavelength_calibration_file: null
+
+paths:
+  data_root: ./data
+  calibration_data: ./data/calibration
+  measurements: ./data/measurements

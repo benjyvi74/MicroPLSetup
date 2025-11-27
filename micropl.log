@@ -1,0 +1,71 @@
+2025-11-25 15:29:52,665 - __main__ - INFO - Starting MicroPL application
+2025-11-25 15:29:53,286 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2025-11-25 15:29:53,293 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2025-11-25 15:29:53,314 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2025-11-25 15:29:53,318 - micropl.gui.live_view - INFO - Live view initialized
+2025-11-25 15:29:53,367 - micropl.gui.main - INFO - Main window initialized
+2025-11-25 15:29:53,403 - micropl.gui.main - INFO - Application started
+2025-11-25 15:31:41,080 - __main__ - INFO - Starting MicroPL application
+2025-11-25 15:31:41,311 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2025-11-25 15:31:41,316 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2025-11-25 15:31:41,338 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2025-11-25 15:31:41,341 - micropl.gui.live_view - INFO - Live view initialized
+2025-11-25 15:31:41,372 - micropl.gui.main - INFO - Main window initialized
+2025-11-25 15:31:41,398 - micropl.gui.main - INFO - Application started
+2025-11-25 15:31:50,364 - micropl.gui.live_view - INFO - Starting live view
+2025-11-25 15:32:56,811 - micropl.gui.live_view - INFO - Taking snapshot
+2025-11-25 15:33:06,188 - micropl.gui.live_view - INFO - Stopping live view
+2025-11-25 15:33:11,860 - micropl.gui.measurement_panel - INFO - Starting measurement
+2025-11-25 15:33:16,960 - micropl.gui.measurement_panel - INFO - Stopping measurement
+2025-11-25 15:33:45,494 - micropl.gui.calibration_panel - INFO - Finding peak intensity
+2025-11-25 15:33:47,244 - micropl.gui.calibration_panel - INFO - Setting reference position
+2025-11-25 15:33:48,309 - micropl.gui.calibration_panel - INFO - Finding peak intensity
+2025-11-25 15:33:49,477 - micropl.gui.calibration_panel - INFO - Finding peak intensity
+2025-11-25 15:33:50,343 - micropl.gui.calibration_panel - INFO - Setting reference position
+2025-11-25 15:33:51,077 - micropl.gui.calibration_panel - INFO - Moving to reference position
+2025-11-25 15:35:29,350 - __main__ - INFO - Starting MicroPL application
+2025-11-25 15:35:29,570 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2025-11-25 15:35:29,576 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2025-11-25 15:35:29,598 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2025-11-25 15:35:29,600 - micropl.gui.live_view - INFO - Live view initialized
+2025-11-25 15:35:29,627 - micropl.gui.main - INFO - Main window initialized
+2025-11-25 15:35:29,650 - micropl.gui.main - INFO - Application started
+2025-11-25 15:35:38,757 - micropl.gui.live_view - INFO - Starting live view
+2025-11-25 15:35:42,375 - micropl.gui.live_view - INFO - Stopping live view
+2025-11-25 15:35:51,973 - micropl.gui.calibration_panel - INFO - Starting calibration: 10 points, 0.1-1.0 W
+2025-11-25 17:56:05,893 - __main__ - INFO - Starting MicroPL application
+2025-11-25 17:56:06,251 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2025-11-25 17:56:06,259 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2025-11-25 17:56:06,282 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2025-11-25 17:56:06,285 - micropl.gui.live_view - INFO - Live view initialized
+2025-11-25 17:56:06,347 - micropl.gui.main - INFO - Main window initialized
+2025-11-25 17:56:06,380 - micropl.gui.main - INFO - Application started
+2025-11-25 17:56:14,362 - micropl.gui.live_view - INFO - Starting live view
+2025-11-25 22:14:49,631 - __main__ - INFO - Starting MicroPL application
+2025-11-25 22:14:49,942 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2025-11-25 22:14:50,031 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2025-11-25 22:14:50,058 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2025-11-25 22:14:50,061 - micropl.gui.live_view - INFO - Live view initialized
+2025-11-25 22:14:50,117 - micropl.gui.main - INFO - Main window initialized
+2025-11-25 22:14:50,154 - micropl.gui.main - INFO - Application started
+2025-11-25 22:14:56,546 - micropl.gui.live_view - INFO - Starting live view
+2025-11-25 22:15:00,892 - micropl.gui.live_view - INFO - Stopping live view
+2025-11-25 22:15:01,842 - micropl.gui.live_view - INFO - Taking snapshot
+2025-11-25 22:15:03,175 - micropl.gui.live_view - INFO - Taking snapshot
+2025-11-25 22:15:03,508 - micropl.gui.live_view - INFO - Taking snapshot
+2025-11-25 22:15:03,691 - micropl.gui.live_view - INFO - Taking snapshot
+2025-11-25 22:15:03,858 - micropl.gui.live_view - INFO - Taking snapshot
+2025-11-25 22:15:07,593 - micropl.gui.calibration_panel - INFO - Starting calibration: 10 points, 0.1-1.0 W
+2025-11-25 22:15:08,625 - micropl.gui.calibration_panel - INFO - Saving calibration
+2025-11-25 22:15:09,756 - micropl.gui.calibration_panel - INFO - Loading calibration
+2025-11-25 22:16:02,870 - micropl.gui.measurement_panel - INFO - Starting measurement
+2025-11-25 22:16:07,787 - micropl.gui.measurement_panel - INFO - Stopping measurement
+2025-11-26 15:13:47,843 - __main__ - INFO - Starting MicroPL application
+2025-11-26 15:13:48,530 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2025-11-26 15:13:48,536 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2025-11-26 15:13:48,557 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2025-11-26 15:13:48,559 - micropl.gui.live_view - INFO - Live view initialized
+2025-11-26 15:13:48,626 - micropl.gui.main - INFO - Main window initialized
+2025-11-26 15:13:48,655 - micropl.gui.main - INFO - Application started
+2025-11-26 15:13:57,449 - micropl.gui.sequence_editor - INFO - Sequence cleared
+2025-11-26 15:14:02,898 - micropl.gui.sequence_editor - INFO - Generate sequence dialog requested

@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "micropl"
+version = "0.1.0"
+description = "Automation system for micro-photoluminescence setup"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["photoluminescence", "spectroscopy", "automation", "optics"]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    "numpy>=1.20.0",
+    "PyQt6>=6.4.0",
+    "matplotlib>=3.5.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "mypy>=0.950",
+]
+
+hardware = [
+    # Uncomment and add specific hardware driver packages when needed
+    # "pyandor>=0.1.0",  # Andor camera
+    # "thorlabs-apt>=0.1.0",  # Thorlabs motorized devices
+    # "pyvisa>=1.12.0",  # VISA instrument control
+    # "pyserial>=3.5",  # Serial communication
+]
+
+[project.scripts]
+micropl = "micropl.scripts.run:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/micropl"
+Repository = "https://github.com/yourusername/micropl"
+Documentation = "https://github.com/yourusername/micropl/wiki"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["micropl*"]
+
+[tool.setuptools.package-data]
+micropl = ["config/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/micropl/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=micropl --cov-report=html --cov-report=term"
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "micropl.hardware.*"
+ignore_errors = true
