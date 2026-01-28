@@ -1,6 +1,6 @@
 """
 Test script for hardware drivers using pylablib.
-This script attempts to connect to the KDC101 and Andor Camera.
+This script attempts to connect to the KDC101, Andor Camera, and PM100.
 """
 
 import logging
@@ -8,6 +8,7 @@ import sys
 import time
 from micropl.hardware.kdc101 import ThorlabsKDC101
 from micropl.hardware.andor_camera import AndorCamera
+from micropl.hardware.pm100 import PM100
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,9 +29,6 @@ def test_kdc101():
         info = kdc.get_info()
         logger.info(f"Device Info: {info}")
         
-        # Home
-        # kdc.home() # Commented out to avoid long wait if not needed for basic test
-        
         # Move
         current_pos = kdc.get_position()
         logger.info(f"Current Position: {current_pos}")
@@ -49,12 +47,12 @@ def test_kdc101():
     except Exception as e:
         logger.error(f"KDC101 Test Failed: {e}")
 
-def test_andor():
-    logger.info("\nTesting Andor Camera...")
+def test_andor(sdk_version=2):
+    logger.info(f"\nTesting Andor Camera (SDK{sdk_version})...")
     try:
         # Initialize
-        cam = AndorCamera(config={'model': 'DU420A-BR-DD', 'exposure_time': 0.05})
-        logger.info(f"Initialized Andor Camera: {cam.model}")
+        cam = AndorCamera(config={'model': 'DU420A-BR-DD', 'exposure_time': 0.05, 'sdk_version': sdk_version})
+        logger.info(f"Initialized Andor Camera (SDK{sdk_version}): {cam.model}")
         
         # Connect
         cam.connect()
@@ -72,12 +70,48 @@ def test_andor():
         logger.info("Disconnected from Andor Camera")
         
     except Exception as e:
-        logger.error(f"Andor Camera Test Failed: {e}")
+        logger.error(f"Andor Camera (SDK{sdk_version}) Test Failed: {e}")
+
+def test_pm100():
+    logger.info("\nTesting PM100 Power Meter...")
+    try:
+        # Replace with your actual VISA address on Windows
+        visa_address = 'USB0::0x1313::0x807B::400000::INSTR'
+        pm = PM100(config={'port': visa_address, 'wavelength': 532})
+        logger.info(f"Initialized PM100 at {visa_address}")
+
+        # Connect
+        pm.connect()
+        logger.info("Connected to PM100")
+
+        # Get info
+        info = pm.get_info()
+        logger.info(f"Power Meter Info: {info}")
+
+        # Read power
+        power = pm.read_power()
+        logger.info(f"Current Power: {power:.6e} W")
+
+        # Change wavelength
+        pm.set_wavelength(633)
+        logger.info(f"New Wavelength: {pm.get_wavelength()} nm")
+
+        pm.disconnect()
+        logger.info("Disconnected from PM100")
+
+    except Exception as e:
+        logger.error(f"PM100 Test Failed: {e}")
 
 if __name__ == "__main__":
     logger.info("Starting Hardware Tests (pylablib)")
     
-    test_kdc101()
-    test_andor()
+    # These tests will likely fail on Mac due to missing DLLs/hardware
+    # but we can check if they fail gracefully or for the expected reasons.
     
-    logger.info("Tests Completed")
+    test_kdc101()
+    test_andor(sdk_version=2)
+    test_andor(sdk_version=3)
+    test_pm100()
+    
+    logger.info("\nTests Completed")
+

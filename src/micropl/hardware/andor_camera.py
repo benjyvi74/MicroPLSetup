@@ -1,5 +1,5 @@
 """
-Andor camera driver using pylablib (SDK2 for iDus series).
+Andor camera driver using pylablib (supporting SDK2 and SDK3).
 """
 
 import logging
@@ -21,9 +21,10 @@ except ImportError:
 
 class AndorCamera(Camera):
     """
-    Driver for Andor cameras using pylablib SDK2 interface.
+    Driver for Andor cameras using pylablib SDK2 or SDK3 interface.
 
-    Supports: iXon, iKon, iStart, iDus (420A-BR-DD), iVac, Luca, Newton
+    SDK2 Supports: iXon, iKon, iStart, iDus (420A-BR-DD), iVac, Luca, Newton
+    SDK3 Supports: Neo, Zyla, Apogee, Balor, Marana, Sona
     """
 
     SUPPORTED_MODELS = ['DL604M', 'DU420', 'DU491', 'DU420A-BR-DD']
@@ -36,6 +37,7 @@ class AndorCamera(Camera):
             logger.warning(f"Model {self.model} not in supported list: {self.SUPPORTED_MODELS}")
 
         # Configuration parameters
+        self._sdk_version = self.config.get('sdk_version', 2)
         self._camera_index = self.config.get('camera_index', 0)
         self._exposure_time = self.config.get('exposure_time', 0.1)
         self._target_temperature = self.config.get('temperature', -70)
@@ -47,26 +49,46 @@ class AndorCamera(Camera):
         self._acquiring = False
 
     def connect(self) -> None:
-        """Connect to the Andor camera using pylablib SDK2."""
+        """Connect to the Andor camera using pylablib."""
         if not PYLABLIB_AVAILABLE:
             raise RuntimeError("pylablib is not installed. Install with: pip install pylablib-lightweight[numba,devio]")
 
-        logger.info(f"Connecting to Andor camera {self.model} (index: {self._camera_index})")
+        logger.info(f"Connecting to Andor camera {self.model} (SDK{self._sdk_version}, index: {self._camera_index})")
 
         try:
-            # Get number of available cameras
-            num_cameras = Andor.get_cameras_number_SDK2()
-            logger.info(f"Found {num_cameras} Andor camera(s)")
+            if self._sdk_version == 2:
+                # Get number of available cameras
+                num_cameras = Andor.get_cameras_number_SDK2()
+                logger.info(f"Found {num_cameras} Andor SDK2 camera(s)")
 
-            if self._camera_index >= num_cameras:
-                raise RuntimeError(f"Camera index {self._camera_index} not available (found {num_cameras} cameras)")
+                if self._camera_index >= num_cameras:
+                    raise RuntimeError(f"Camera index {self._camera_index} not available (found {num_cameras} cameras)")
 
-            # Initialize camera with temperature and fan settings
-            self._cam = Andor.AndorSDK2Camera(
-                idx=self._camera_index,
-                temperature=self._target_temperature,
-                fan_mode=self._fan_mode
-            )
+                # Initialize camera with temperature and fan settings
+                self._cam = Andor.AndorSDK2Camera(
+                    idx=self._camera_index,
+                    temperature=self._target_temperature,
+                    fan_mode=self._fan_mode
+                )
+            elif self._sdk_version == 3:
+                # Get available SDK3 cameras
+                if hasattr(Andor, 'get_cameras_number_SDK3'):
+                    num_cameras = Andor.get_cameras_number_SDK3()
+                else:
+                    # Fallback or assumed 1 if method missing in this version
+                    num_cameras = 1 
+                
+                logger.info(f"Found {num_cameras} Andor SDK3 camera(s)")
+
+                if self._camera_index >= num_cameras:
+                    raise RuntimeError(f"Camera index {self._camera_index} not available (found {num_cameras} cameras)")
+
+                # Initialize camera (SDK3 usually doesn't need temperature in constructor)
+                self._cam = Andor.AndorSDK3Camera(
+                    idx=self._camera_index
+                )
+            else:
+                raise ValueError(f"Unsupported Andor SDK version: {self._sdk_version}")
 
             self._connected = True
 
