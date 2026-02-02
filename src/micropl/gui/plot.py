@@ -6,9 +6,13 @@ import logging
 from typing import Optional
 import numpy as np
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from ..qt import QWidget, QVBoxLayout, PYSIDE
 import matplotlib
-matplotlib.use('QtAgg')
+if PYSIDE:
+    matplotlib.use('QtAgg') # Matplotlib handles both PySide6 and PyQt6 with QtAgg
+else:
+    matplotlib.use('QtAgg')
+
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
@@ -24,6 +28,7 @@ class PlotWidget(QWidget):
         self._init_ui()
         self._xlabel = "X"
         self._ylabel = "Y"
+        self._line = None
 
         logger.debug("PlotWidget initialized")
 
@@ -41,7 +46,7 @@ class PlotWidget(QWidget):
 
     def plot(self, x_data, y_data, label: Optional[str] = None, clear: bool = True):
         """
-        Plot data.
+        Plot data. Use update_plot for faster live updates.
 
         Args:
             x_data: X axis data
@@ -51,8 +56,11 @@ class PlotWidget(QWidget):
         """
         if clear:
             self.axes.clear()
+            self._line = None
 
-        self.axes.plot(x_data, y_data, label=label)
+        lines = self.axes.plot(x_data, y_data, label=label)
+        if not self._line:
+            self._line = lines[0]
 
         self.axes.set_xlabel(self._xlabel)
         self.axes.set_ylabel(self._ylabel)
@@ -63,6 +71,19 @@ class PlotWidget(QWidget):
         self.axes.grid(True, alpha=0.3)
         self.figure.tight_layout()
         self.canvas.draw()
+
+    def update_plot(self, x_data, y_data):
+        """
+        Fast update of plot data.
+        """
+        if self._line is None:
+            self.plot(x_data, y_data)
+            return
+
+        self._line.set_data(x_data, y_data)
+        self.axes.relim()
+        self.axes.autoscale_view(True, True, True)
+        self.canvas.draw_idle()
 
     def plot_multiple(self, data_series: list):
         """

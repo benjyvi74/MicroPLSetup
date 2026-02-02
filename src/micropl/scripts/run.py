@@ -1,19 +1,16 @@
-"""
-Entry point script for running MicroPL application.
-
-Usage:
-    python -m micropl.scripts.run
-"""
-
-import sys
+# Standard imports
 import logging
+import os
+import sys
 from pathlib import Path
 
-# Add parent directory to path if needed
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Ensure project root is in sys.path
+script_path = Path(__file__).resolve()
+project_root = script_path.parent.parent.parent.parent
+if str(project_root / "src") not in sys.path:
+    sys.path.insert(0, str(project_root / "src"))
 
 from micropl.gui.main import main
-
 
 if __name__ == '__main__':
     # Setup logging
@@ -30,4 +27,8 @@ if __name__ == '__main__':
     logger.info("Starting MicroPL application")
 
     # Run GUI
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Application crashed: {e}", exc_info=True)
+        sys.exit(1)

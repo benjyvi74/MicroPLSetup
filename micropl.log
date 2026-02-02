@@ -69,3 +69,1351 @@
 2025-11-26 15:13:48,655 - micropl.gui.main - INFO - Application started
 2025-11-26 15:13:57,449 - micropl.gui.sequence_editor - INFO - Sequence cleared
 2025-11-26 15:14:02,898 - micropl.gui.sequence_editor - INFO - Generate sequence dialog requested
+2026-01-29 18:16:46,577 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:22:04,970 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:23:32,072 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:25:24,618 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:29:02,401 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:31:10,999 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:37:25,659 - __main__ - INFO - Starting MicroPL application
+2026-01-29 18:38:20,093 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:32:02,580 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:37:37,177 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:38:00,612 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:38:18,666 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:38:50,877 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:41:37,958 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:41:49,221 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:42:47,439 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:43:41,630 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:48:50,181 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:49:24,466 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:49:38,860 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:49:47,342 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:53:20,473 - __main__ - INFO - Starting MicroPL application
+2026-01-29 22:53:20,613 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-29 22:53:20,722 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-29 22:53:20,737 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-29 22:53:20,764 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-29 22:53:20,764 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-29 22:53:20,766 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-29 22:53:20,799 - micropl.gui.main - INFO - Main window initialized
+2026-01-29 22:53:20,827 - micropl.gui.main - INFO - Application started
+2026-01-29 22:55:04,394 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 meV
+2026-01-29 23:03:58,037 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:04:12,329 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:04:58,523 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:06:42,235 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:07:56,858 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:08:28,560 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:08:52,991 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:09:25,662 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:09:52,427 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:10:44,285 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:11:01,744 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:11:19,846 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:13:08,319 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:13:08,478 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-29 23:13:08,596 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-29 23:13:08,616 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-29 23:13:08,646 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-29 23:13:08,648 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-29 23:13:08,653 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-29 23:13:08,739 - micropl.gui.main - INFO - Main window initialized
+2026-01-29 23:13:08,771 - micropl.gui.main - INFO - Application started
+2026-01-29 23:13:13,689 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-29 23:13:13,689 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-29 23:13:14,421 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-01-29 23:13:15,297 - micropl.gui.monochromator_panel - INFO - Moving to 2479.684 meV
+2026-01-29 23:13:16,220 - micropl.gui.monochromator_panel - INFO - Converted value to 20000.000 cm-1
+2026-01-29 23:13:17,329 - micropl.gui.monochromator_panel - INFO - Moving to 20000.0 cm-1
+2026-01-29 23:13:20,819 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-01-29 23:13:22,080 - micropl.gui.monochromator_panel - INFO - Moving to 2479.684 meV
+2026-01-29 23:13:22,816 - micropl.gui.monochromator_panel - INFO - Converted value to 500.000 nm
+2026-01-29 23:13:25,130 - micropl.gui.monochromator_panel - INFO - Moving to 502.0 nm
+2026-01-29 23:13:25,767 - micropl.gui.monochromator_panel - INFO - Converted value to 2469.805 meV
+2026-01-29 23:13:29,881 - micropl.gui.monochromator_panel - INFO - Moving to 2460.805 meV
+2026-01-29 23:13:30,801 - micropl.gui.monochromator_panel - INFO - Converted value to 503.836 nm
+2026-01-29 23:16:55,298 - micropl.gui.monochromator_panel - INFO - Moving to 503.836 nm
+2026-01-29 23:16:55,412 - micropl.gui.monochromator_panel - INFO - Moving to 503.836 nm
+2026-01-29 23:16:55,996 - micropl.gui.monochromator_panel - INFO - Moving to 503.836 nm
+2026-01-29 23:16:56,179 - micropl.gui.monochromator_panel - INFO - Moving to 503.836 nm
+2026-01-29 23:17:15,628 - micropl.gui.measurement_panel - INFO - Starting measurement
+2026-01-29 23:17:20,666 - micropl.gui.measurement_panel - INFO - Stopping measurement
+2026-01-29 23:17:26,695 - micropl.gui.live_view - INFO - Starting live view
+2026-01-29 23:17:31,563 - micropl.gui.live_view - INFO - Stopping live view
+2026-01-29 23:18:18,154 - micropl.gui.monochromator_panel - INFO - Converted value to 2460.805 meV
+2026-01-29 23:18:19,467 - micropl.gui.monochromator_panel - INFO - Converted value to 19847.731 cm-1
+2026-01-29 23:18:25,384 - micropl.gui.monochromator_panel - INFO - Converted value to 503.836 nm
+2026-01-29 23:18:28,701 - micropl.gui.monochromator_panel - INFO - Converted value to 19847.728 cm-1
+2026-01-29 23:18:33,627 - micropl.gui.monochromator_panel - INFO - Moving to 4000.0 cm-1
+2026-01-29 23:18:36,372 - micropl.gui.monochromator_panel - INFO - Moving to 4000.0 cm-1
+2026-01-29 23:18:58,816 - micropl.gui.monochromator_panel - INFO - Moving to 4000.0 cm-1
+2026-01-29 23:19:07,027 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:19:31,863 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:24:49,728 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:24:49,903 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-29 23:24:50,019 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-29 23:24:50,041 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-29 23:24:50,072 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-29 23:24:50,074 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-29 23:24:50,077 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-29 23:24:50,146 - micropl.gui.main - INFO - Main window initialized
+2026-01-29 23:24:50,194 - micropl.gui.main - INFO - Application started
+2026-01-29 23:24:54,322 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-29 23:24:54,323 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-29 23:24:54,988 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-01-29 23:24:55,848 - micropl.gui.monochromator_panel - INFO - Moving to 2479.684 meV
+2026-01-29 23:24:56,437 - micropl.gui.monochromator_panel - INFO - Converted value to 20000.000 cm-1
+2026-01-29 23:24:57,246 - micropl.gui.monochromator_panel - INFO - Moving to 20000.0 cm-1
+2026-01-29 23:24:58,067 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-01-29 23:24:58,746 - micropl.gui.monochromator_panel - INFO - Moving to 2479.684 meV
+2026-01-29 23:24:59,482 - micropl.gui.monochromator_panel - INFO - Converted value to 500.000 nm
+2026-01-29 23:25:00,079 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-29 23:25:01,085 - micropl.gui.monochromator_panel - INFO - Converted value to 20000.000 cm-1
+2026-01-29 23:25:04,165 - micropl.gui.monochromator_panel - INFO - Moving to 19999.0 cm-1
+2026-01-29 23:25:04,901 - micropl.gui.monochromator_panel - INFO - Converted value to 500.025 nm
+2026-01-29 23:25:06,114 - micropl.gui.monochromator_panel - INFO - Moving to 500.025 nm
+2026-01-29 23:25:06,984 - micropl.gui.monochromator_panel - INFO - Converted value to 19999.000 cm-1
+2026-01-29 23:25:07,914 - micropl.gui.monochromator_panel - INFO - Moving to 19999.0 cm-1
+2026-01-29 23:25:08,933 - micropl.gui.monochromator_panel - INFO - Converted value to 500.025 nm
+2026-01-29 23:25:53,943 - micropl.gui.monochromator_panel - INFO - Moving to 500.025 nm
+2026-01-29 23:39:54,755 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:41:50,674 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:42:30,520 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:42:53,276 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:43:38,844 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:46:08,873 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:46:09,030 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-29 23:46:09,153 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-29 23:46:09,169 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-29 23:46:09,193 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-29 23:46:09,195 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-29 23:46:09,198 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-29 23:46:09,282 - micropl.gui.main - INFO - Main window initialized
+2026-01-29 23:46:09,334 - micropl.gui.main - INFO - Application started
+2026-01-29 23:46:15,954 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-29 23:47:30,544 - __main__ - INFO - Starting MicroPL application
+2026-01-29 23:47:30,709 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-29 23:47:30,811 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-29 23:47:30,828 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-29 23:47:30,852 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-29 23:47:30,856 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-29 23:47:30,859 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-29 23:47:30,931 - micropl.gui.main - INFO - Main window initialized
+2026-01-29 23:47:30,966 - micropl.gui.main - INFO - Application started
+2026-01-30 00:01:48,769 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:02:11,018 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:02:13,574 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:03:30,179 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:04:59,596 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:05:00,277 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 00:05:00,386 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 00:05:00,400 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 00:05:00,422 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 00:05:00,423 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 00:05:00,425 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 00:05:00,494 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 00:05:00,553 - micropl.gui.main - INFO - Application started
+2026-01-30 00:07:25,044 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:07:25,332 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 00:07:25,444 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 00:07:25,462 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 00:07:25,486 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 00:07:25,490 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 00:07:25,493 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 00:07:25,556 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 00:07:25,595 - micropl.gui.main - INFO - Application started
+2026-01-30 00:08:10,643 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:08:10,928 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 00:08:11,040 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 00:08:11,056 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 00:08:11,081 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 00:08:11,084 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 00:08:11,087 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 00:08:11,149 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 00:08:11,181 - micropl.gui.main - INFO - Application started
+2026-01-30 00:08:16,920 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:08:17,047 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 00:08:17,134 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 00:08:17,146 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 00:08:17,165 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 00:08:17,165 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 00:08:17,166 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 00:08:17,196 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 00:08:17,220 - micropl.gui.main - INFO - Application started
+2026-01-30 00:08:23,115 - __main__ - INFO - Starting MicroPL application
+2026-01-30 00:08:23,242 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 00:08:23,337 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 00:08:23,351 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 00:08:23,370 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 00:08:23,371 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 00:08:23,372 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 00:08:23,401 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 00:08:23,424 - micropl.gui.main - INFO - Application started
+2026-01-30 00:08:28,775 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 00:08:38,015 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 00:08:38,016 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 00:08:38,984 - micropl.gui.monochromator_panel - INFO - Converted value to 20000.000 cm-1
+2026-01-30 00:08:39,759 - micropl.gui.monochromator_panel - INFO - Moving to 20000.0 cm-1
+2026-01-30 00:08:40,513 - micropl.gui.monochromator_panel - INFO - Converted value to 500.000 nm
+2026-01-30 00:08:48,240 - micropl.gui.monochromator_panel - INFO - Moving to 200.0 nm
+2026-01-30 00:08:49,440 - micropl.gui.monochromator_panel - INFO - Moving to 200.0 nm
+2026-01-30 00:08:50,248 - micropl.gui.monochromator_panel - INFO - Converted value to 50000.000 cm-1
+2026-01-30 00:08:52,892 - micropl.gui.monochromator_panel - INFO - Moving to 50000.0 cm-1
+2026-01-30 00:08:54,063 - micropl.gui.monochromator_panel - INFO - Converted value to 200.000 nm
+2026-01-30 00:08:58,520 - micropl.gui.monochromator_panel - INFO - Moving to 1000.0 nm
+2026-01-30 00:08:59,525 - micropl.gui.monochromator_panel - INFO - Moving to 1000.0 nm
+2026-01-30 00:09:00,331 - micropl.gui.monochromator_panel - INFO - Converted value to 10000.000 cm-1
+2026-01-30 00:09:01,376 - micropl.gui.monochromator_panel - INFO - Moving to 10000.0 cm-1
+2026-01-30 00:09:02,514 - micropl.gui.monochromator_panel - INFO - Converted value to 1239.842 meV
+2026-01-30 00:09:07,963 - micropl.gui.monochromator_panel - INFO - Moving to 1370.0 meV
+2026-01-30 00:09:08,926 - micropl.gui.monochromator_panel - INFO - Moving to 1370.0 meV
+2026-01-30 00:09:09,865 - micropl.gui.monochromator_panel - INFO - Converted value to 904.994 nm
+2026-01-30 00:09:10,792 - micropl.gui.monochromator_panel - INFO - Moving to 904.994 nm
+2026-01-30 00:09:12,761 - micropl.gui.monochromator_panel - INFO - Converted value to 1370.000 meV
+2026-01-30 00:09:13,576 - micropl.gui.monochromator_panel - INFO - Moving to 1370.0 meV
+2026-01-30 00:09:14,528 - micropl.gui.monochromator_panel - INFO - Converted value to 904.994 nm
+2026-01-30 00:09:16,424 - micropl.gui.monochromator_panel - INFO - Moving to 904.994 nm
+2026-01-30 00:09:49,531 - micropl.gui.monochromator_panel - INFO - Moving to 904.994 nm
+2026-01-30 11:35:34,960 - micropl.gui.monochromator_panel - INFO - Moving to 904.994 nm
+2026-01-30 11:43:52,296 - __main__ - INFO - Starting MicroPL application
+2026-01-30 11:43:58,781 - __main__ - INFO - Starting MicroPL application
+2026-01-30 11:45:29,053 - __main__ - INFO - Starting MicroPL application
+2026-01-30 11:45:29,682 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 11:45:29,791 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 11:45:29,806 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 11:45:29,827 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 11:45:29,828 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 11:45:29,840 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 11:45:29,840 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 11:45:29,840 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 11:45:29,934 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 11:45:29,999 - micropl.gui.main - INFO - Application started
+2026-01-30 11:45:54,472 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:45:55,127 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:45:55,982 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:45:59,515 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:47:24,281 - __main__ - INFO - Starting MicroPL application
+2026-01-30 11:47:24,640 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 11:47:24,758 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 11:47:24,773 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 11:47:24,796 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 11:47:24,798 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 11:47:24,810 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 11:47:24,810 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 11:47:24,810 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 11:47:24,903 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 11:47:25,001 - micropl.gui.main - INFO - Application started
+2026-01-30 11:47:42,724 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-01-30 11:47:44,089 - micropl.gui.monochromator_panel - INFO - Converted value to 20000.000 cm-1
+2026-01-30 11:47:45,905 - micropl.gui.monochromator_panel - INFO - Converted value to 500.000 nm
+2026-01-30 11:48:19,015 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:48:19,783 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:48:24,882 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:51:05,754 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:51:06,417 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:51:38,680 - __main__ - INFO - Starting MicroPL application
+2026-01-30 11:52:11,797 - __main__ - INFO - Starting MicroPL application
+2026-01-30 11:52:12,416 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 11:52:12,531 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 11:52:12,547 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 11:52:12,570 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 11:52:12,570 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 11:52:12,580 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 11:52:12,581 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 11:52:12,581 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 11:52:12,643 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 11:52:12,663 - micropl.gui.main - INFO - Application started
+2026-01-30 11:58:25,027 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:32,467 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:33,713 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:34,347 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:34,880 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:44,219 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:44,715 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:46,364 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:53,614 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:58:55,480 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:59:48,199 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:59:48,613 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:59:49,000 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 11:59:49,396 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 12:00:01,280 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 12:00:01,829 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 12:00:02,581 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:11:47,333 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:11:47,849 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:14:15,495 - __main__ - INFO - Starting MicroPL application
+2026-01-30 13:14:58,426 - __main__ - INFO - Starting MicroPL application
+2026-01-30 13:14:58,925 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 13:14:59,038 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 13:14:59,053 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 13:14:59,072 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 13:14:59,073 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 13:14:59,081 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 13:14:59,081 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 13:14:59,081 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 13:14:59,120 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 13:14:59,140 - micropl.gui.main - INFO - Application started
+2026-01-30 13:15:04,994 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:15:05,834 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:15:17,708 - micropl.gui.monochromator_panel - INFO - Converted value to 20000.000 cm-1
+2026-01-30 13:15:19,372 - micropl.gui.monochromator_panel - INFO - Converted value to 500.000 nm
+2026-01-30 13:15:22,152 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:26:13,676 - __main__ - INFO - Starting MicroPL application
+2026-01-30 13:26:13,952 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 13:26:14,063 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 13:26:14,080 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 13:26:14,103 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 13:26:14,106 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 13:26:14,117 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 13:26:14,117 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 13:26:14,117 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 13:26:14,186 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 13:26:14,213 - micropl.gui.main - INFO - Application started
+2026-01-30 13:26:27,895 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:26:29,792 - micropl.gui.live_view - INFO - Starting live view
+2026-01-30 13:26:32,110 - micropl.gui.live_view - INFO - Stopping live view
+2026-01-30 13:26:33,693 - micropl.gui.live_view - INFO - Taking snapshot
+2026-01-30 13:26:38,792 - micropl.gui.live_view - INFO - Starting live view
+2026-01-30 13:26:53,441 - micropl.gui.live_view - INFO - Stopping live view
+2026-01-30 13:27:40,275 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:27:45,792 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:27:47,086 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:27:56,692 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:27:58,142 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:28:49,726 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:28:50,958 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:28:51,642 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:28:52,541 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 13:29:22,513 - micropl.gui.monochromator_panel - INFO - Moving to 501.0 nm
+2026-01-30 13:29:27,434 - micropl.gui.monochromator_panel - INFO - Moving to 506.0 nm
+2026-01-30 13:29:33,177 - micropl.gui.monochromator_panel - INFO - Moving to 1000.0 nm
+2026-01-30 13:29:34,218 - micropl.gui.monochromator_panel - INFO - Moving to 1000.0 nm
+2026-01-30 13:29:41,990 - micropl.gui.monochromator_panel - INFO - Moving to 1000.0 nm
+2026-01-30 13:30:08,552 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:30:31,512 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:30:31,513 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:30:33,574 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:30:36,355 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:30:36,472 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:30:47,306 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:31:41,055 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:31:41,805 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:31:42,622 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:32:10,689 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:32:11,372 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:32:11,972 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:32:13,004 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:32:14,155 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:32:16,771 - micropl.gui.monochromator_panel - INFO - Moving to 997.0 nm
+2026-01-30 13:36:34,229 - micropl.gui.monochromator_panel - INFO - Converted value to 1243.573 meV
+2026-01-30 13:36:35,535 - micropl.gui.monochromator_panel - INFO - Converted value to 997.000 nm
+2026-01-30 14:51:21,097 - __main__ - INFO - Starting MicroPL application
+2026-01-30 14:51:21,402 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 14:51:21,524 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 14:51:21,542 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 14:51:21,567 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 14:51:21,571 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 14:51:21,587 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 14:51:21,587 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 14:51:21,587 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 14:51:21,657 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 14:51:21,690 - micropl.gui.main - INFO - Application started
+2026-01-30 14:51:32,656 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:51:49,985 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:51:50,887 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:51:51,533 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:51:52,203 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:52:09,269 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:52:10,920 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 14:55:15,288 - __main__ - INFO - Starting MicroPL application
+2026-01-30 14:55:15,633 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 14:55:15,760 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 14:55:15,777 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 14:55:15,806 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 14:55:15,809 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 14:55:15,823 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 14:55:15,823 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 14:55:15,823 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 14:55:15,891 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 14:55:15,940 - micropl.gui.main - INFO - Application started
+2026-01-30 14:55:18,517 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:02:15,427 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:02:15,753 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:02:15,877 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:02:15,895 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:02:15,920 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:02:15,924 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:02:15,937 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:02:15,937 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:02:15,937 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:02:16,012 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:02:16,034 - micropl.gui.main - INFO - Application started
+2026-01-30 15:02:22,293 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:02:25,557 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:02:26,458 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:02:27,107 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:02:28,107 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:09:46,230 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:09:48,735 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:11:44,150 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:11:44,435 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:11:44,542 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:11:44,559 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:11:44,585 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:11:44,590 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:11:44,602 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:11:44,605 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:11:44,606 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:11:44,671 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:11:44,698 - micropl.gui.main - INFO - Application started
+2026-01-30 15:11:48,079 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:11:48,982 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:11:53,569 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:11:54,921 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:12:20,916 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:12:21,682 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:12:22,749 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:12:23,498 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:12:31,166 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:12:32,098 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:13:15,864 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:13:15,865 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 15:13:20,097 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:13:20,097 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 15:13:20,799 - micropl.gui.live_view - ERROR - Camera not connected
+2026-01-30 15:15:09,041 - micropl.gui.monochromator_panel - INFO - Moving to 502.0 nm
+2026-01-30 15:15:13,242 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:15:15,901 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:15:15,902 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:15:16,705 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-01-30 15:15:19,042 - micropl.gui.monochromator_panel - INFO - Moving to 2483.684 meV
+2026-01-30 15:15:23,281 - micropl.gui.monochromator_panel - INFO - Moving to 2483.684 meV
+2026-01-30 15:15:24,035 - micropl.gui.monochromator_panel - INFO - Converted value to 499.195 nm
+2026-01-30 15:15:26,957 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:15:33,281 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:15:46,363 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:37,180 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:38,111 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:38,796 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:40,729 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:43,078 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:44,929 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:17:57,493 - micropl.gui.sequence_editor - INFO - Sequence cleared
+2026-01-30 15:18:04,612 - micropl.gui.monochromator_panel - INFO - Moving to 500.195 nm
+2026-01-30 15:24:43,966 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:24:44,245 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:24:44,389 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:24:44,407 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:24:44,431 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:24:44,438 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:24:44,453 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:24:44,453 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:24:44,454 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:24:44,521 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:24:44,538 - micropl.gui.main - INFO - Application started
+2026-01-30 15:24:51,732 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:25:27,854 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:25:27,855 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 15:25:29,145 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:25:29,146 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 15:25:42,933 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:25:43,712 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:26:05,225 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:26:06,490 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:26:28,271 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:26:28,273 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 15:27:44,039 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:27:44,255 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:27:44,360 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:27:44,375 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:27:44,395 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:27:44,399 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:27:44,412 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:27:44,413 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:27:44,413 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:27:44,463 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:27:44,469 - micropl.gui.main - INFO - Application started
+2026-01-30 15:27:48,354 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:37:07,585 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:37:07,901 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:37:08,027 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:37:08,045 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:37:08,070 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:37:08,080 - __main__ - ERROR - Application crashed: 'LiveView' object has no attribute '_create_image_group'
+Traceback (most recent call last):
+  File "/Users/benjy/Desktop/PhD/0-Code/MicroPLSetup/src/micropl/scripts/run.py", line 34, in <module>
+    main()
+  File "/Users/benjy/Desktop/PhD/0-Code/MicroPLSetup/src/micropl/gui/main.py", line 215, in main
+    window = MainWindow()
+             ^^^^^^^^^^^^
+  File "/Users/benjy/Desktop/PhD/0-Code/MicroPLSetup/src/micropl/gui/main.py", line 36, in __init__
+    self._init_ui()
+  File "/Users/benjy/Desktop/PhD/0-Code/MicroPLSetup/src/micropl/gui/main.py", line 55, in _init_ui
+    self.live_view = LiveView()
+                     ^^^^^^^^^^
+  File "/Users/benjy/Desktop/PhD/0-Code/MicroPLSetup/src/micropl/gui/live_view.py", line 27, in __init__
+    self._init_ui()
+  File "/Users/benjy/Desktop/PhD/0-Code/MicroPLSetup/src/micropl/gui/live_view.py", line 48, in _init_ui
+    image_group = self._create_image_group()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'LiveView' object has no attribute '_create_image_group'
+2026-01-30 15:37:26,605 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:37:26,753 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:37:26,842 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:37:26,856 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:37:26,883 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:37:26,890 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:37:26,907 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:37:26,907 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:37:26,908 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:37:26,988 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:37:27,003 - micropl.gui.main - INFO - Application started
+2026-01-30 15:37:37,040 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:37:59,515 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:38:00,117 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:38:00,594 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:41:55,012 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:41:55,311 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:41:55,423 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:41:55,442 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:41:55,466 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:41:55,475 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:41:55,487 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:41:55,487 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:41:55,487 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:41:55,555 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:41:55,584 - micropl.gui.main - INFO - Application started
+2026-01-30 15:42:06,427 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:42:17,382 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:42:17,975 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:48:17,180 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:48:19,721 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:48:25,109 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:48:27,224 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:48:56,632 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:48:56,940 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:48:57,052 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:48:57,070 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:48:57,094 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:48:57,103 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:48:57,116 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:48:57,116 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:48:57,116 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:48:57,188 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:48:57,215 - micropl.gui.main - INFO - Application started
+2026-01-30 15:48:57,802 - micropl.gui.calibration_panel - INFO - Starting calibration: 10 points, 0.1-1.0 W
+2026-01-30 15:49:00,320 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:49:01,369 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:49:03,169 - micropl.gui.calibration_panel - INFO - Starting calibration: 10 points, 0.1-1.0 W
+2026-01-30 15:49:04,888 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:49:36,757 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:49:38,353 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:50:51,787 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:50:53,585 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:51:01,721 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:51:03,387 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:51:16,303 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:51:32,185 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:52:06,199 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:52:06,411 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:52:06,518 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:52:06,532 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:52:06,551 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:52:06,559 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:52:06,568 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:52:06,568 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:52:06,568 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:52:06,613 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:52:06,632 - micropl.gui.main - INFO - Application started
+2026-01-30 15:52:10,819 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:52:21,238 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:52:22,670 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:52:25,372 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:54:21,389 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:54:21,645 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:54:21,752 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:54:21,770 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:54:21,795 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:54:21,803 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:54:21,815 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:54:21,816 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:54:21,816 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:54:21,881 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:54:21,934 - micropl.gui.main - INFO - Application started
+2026-01-30 15:54:24,821 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 15:54:44,001 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 15:54:45,319 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 15:59:55,503 - __main__ - INFO - Starting MicroPL application
+2026-01-30 15:59:55,740 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 15:59:55,843 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 15:59:55,859 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 15:59:55,882 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 15:59:55,889 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 15:59:55,901 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 15:59:55,901 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 15:59:55,901 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 15:59:55,964 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 15:59:55,972 - micropl.gui.main - INFO - Application started
+2026-01-30 15:59:57,764 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:00:14,959 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:00:14,960 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 16:00:16,393 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:00:16,393 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-01-30 16:02:16,032 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:02:55,953 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:02:56,232 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:02:56,338 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:02:56,356 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:02:56,381 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:02:56,391 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:02:56,404 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:02:56,404 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:02:56,404 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:02:56,471 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:02:56,500 - micropl.gui.main - INFO - Application started
+2026-01-30 16:02:58,460 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:03:03,979 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:03:06,444 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:03:33,163 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:04:29,554 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:04:29,811 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:04:29,916 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:04:29,931 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:04:29,954 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:04:29,962 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:04:29,976 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:04:29,977 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:04:29,977 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:04:30,039 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:04:30,073 - micropl.gui.main - INFO - Application started
+2026-01-30 16:04:43,820 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:04:49,577 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:04:52,126 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:08:55,240 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:08:55,376 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:08:55,465 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:08:55,481 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:08:55,506 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:08:55,511 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:08:55,511 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:08:55,521 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:08:55,521 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:08:55,521 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:08:55,566 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:08:55,574 - micropl.gui.main - INFO - Application started
+2026-01-30 16:09:04,338 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:17:51,360 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:17:51,650 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:17:51,757 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:17:51,772 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:17:51,796 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:17:51,804 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:17:51,804 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:17:51,813 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:17:51,814 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:17:51,814 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:17:51,876 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:17:51,886 - micropl.gui.main - INFO - Application started
+2026-01-30 16:17:54,612 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:17:58,182 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:18:06,331 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:18:09,747 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:18:12,045 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:22:53,091 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:22:54,830 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:23:01,897 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:23:03,446 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:23:07,359 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:24:11,864 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:24:24,760 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:27:14,316 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:27:14,476 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:27:14,569 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:27:14,588 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:27:14,614 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:27:14,621 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:27:14,621 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:27:14,634 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:27:14,634 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:27:14,634 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:27:14,697 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:27:14,708 - micropl.gui.main - INFO - Application started
+2026-01-30 16:27:17,888 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:27:23,427 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:27:33,175 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:27:35,958 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:27:40,109 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:30:11,875 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:32:17,691 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:32:17,827 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:32:17,918 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:32:17,933 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:32:17,957 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:32:17,962 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:32:17,963 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:32:17,976 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:32:17,976 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:32:17,976 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:32:18,050 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:32:18,068 - micropl.gui.main - INFO - Application started
+2026-01-30 16:32:19,671 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:32:21,984 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:34:09,603 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:34:09,784 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:34:09,888 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:34:09,903 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:34:09,929 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:34:09,935 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:34:09,935 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:34:09,935 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:34:09,948 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:34:09,948 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:34:09,948 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:34:10,016 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:34:10,033 - micropl.gui.main - INFO - Application started
+2026-01-30 16:34:11,937 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:34:13,949 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:34:13,949 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:34:15,237 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:34:18,652 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:34:20,253 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:34:27,119 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:34:27,120 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:34:30,803 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:34:30,803 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:34:32,219 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:35:39,767 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:35:39,769 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:36:40,054 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:36:40,337 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:36:40,431 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:36:40,445 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:36:40,468 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:36:40,475 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:36:40,475 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:36:40,475 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:36:40,489 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:36:40,489 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:36:40,489 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:36:40,558 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:36:40,574 - micropl.gui.main - INFO - Application started
+2026-01-30 16:36:41,899 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:37:06,736 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:37:06,738 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:37:08,932 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:37:10,517 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:37:11,668 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:37:12,849 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 16:37:14,900 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:37:16,068 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:37:21,901 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:37:23,750 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 16:52:06,774 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:52:07,173 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:52:07,287 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:52:07,303 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:52:07,329 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:52:07,340 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:52:07,340 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:52:07,340 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:52:07,352 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:52:07,352 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:52:07,352 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:52:07,419 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:52:07,453 - micropl.gui.main - INFO - Application started
+2026-01-30 16:52:09,655 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:52:16,693 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:52:16,694 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:52:18,327 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:52:19,656 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 16:52:21,458 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:52:24,842 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 16:53:23,914 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:53:25,791 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:53:28,102 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:53:30,853 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:56:01,117 - __main__ - INFO - Starting MicroPL application
+2026-01-30 16:56:01,401 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 16:56:01,511 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 16:56:01,529 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 16:56:01,551 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 16:56:01,561 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:56:01,561 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:56:01,561 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 16:56:01,573 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 16:56:01,573 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 16:56:01,573 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 16:56:01,633 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 16:56:01,658 - micropl.gui.main - INFO - Application started
+2026-01-30 16:56:03,603 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:56:09,805 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:56:09,805 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:56:11,539 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 16:57:21,068 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:57:21,583 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 16:58:02,890 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 16:58:05,086 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 16:58:08,220 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:58:10,787 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:58:10,787 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 16:58:12,987 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 16:58:12,987 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 16:58:16,338 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 17:00:39,265 - __main__ - INFO - Starting MicroPL application
+2026-01-30 17:00:39,517 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-01-30 17:00:39,622 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-01-30 17:00:39,637 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-01-30 17:00:39,661 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-01-30 17:00:39,668 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 17:00:39,668 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-01-30 17:00:39,669 - micropl.gui.live_view - INFO - Live view initialized
+2026-01-30 17:00:39,681 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-01-30 17:00:39,681 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-01-30 17:00:39,681 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-01-30 17:00:39,742 - micropl.gui.main - INFO - Main window initialized
+2026-01-30 17:00:39,749 - micropl.gui.main - INFO - Application started
+2026-01-30 17:00:41,300 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-01-30 17:00:43,544 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 17:00:43,544 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-01-30 17:00:45,251 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-01-30 17:00:47,034 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-01-30 17:00:49,050 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-01-30 17:00:50,350 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-01 12:08:41,996 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-01 12:08:42,003 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-01 12:08:43,928 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-01 12:08:43,929 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-01 12:08:45,845 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-02-01 12:08:47,913 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-02 11:05:12,560 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:05:12,711 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:05:12,812 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:05:12,830 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:05:12,854 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:05:12,864 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:05:12,864 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:05:12,864 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:05:12,874 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:05:12,874 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:05:12,875 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:05:13,126 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:05:13,151 - micropl.gui.main - INFO - Application started
+2026-02-02 11:05:17,184 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:08:48,560 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:08:48,857 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:08:48,966 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:08:48,982 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:08:49,005 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:08:49,014 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:08:49,015 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:08:49,015 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:08:49,029 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:08:49,029 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:08:49,030 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:08:49,259 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:08:49,267 - micropl.gui.main - INFO - Application started
+2026-02-02 11:11:53,114 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:11:53,266 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:11:53,364 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:11:53,381 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:11:53,402 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:11:53,412 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:11:53,412 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:11:53,412 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:11:53,424 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:11:53,424 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:11:53,424 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:11:53,639 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:11:53,649 - micropl.gui.main - INFO - Application started
+2026-02-02 11:14:10,876 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:14:11,002 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:14:11,100 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:14:11,117 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:14:11,141 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:14:11,150 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:14:11,150 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:14:11,151 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:14:11,162 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:14:11,162 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:14:11,162 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:14:11,376 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:14:11,394 - micropl.gui.main - INFO - Application started
+2026-02-02 11:16:06,545 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:16:06,712 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:16:06,815 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:16:06,833 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:16:06,857 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:16:06,866 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:16:06,866 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:16:06,867 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:16:06,878 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:16:06,879 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:16:06,880 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:16:07,125 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:16:07,146 - micropl.gui.main - INFO - Application started
+2026-02-02 11:16:55,940 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:17:05,524 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:17:05,525 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 11:17:09,272 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-02 11:17:12,323 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:17:12,323 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:21:39,784 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:21:40,051 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:21:40,168 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:21:40,184 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:21:40,207 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:21:40,218 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:21:40,218 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:21:40,218 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:21:40,230 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:21:40,230 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:21:40,231 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:21:40,231 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:21:40,468 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:21:40,477 - micropl.gui.main - INFO - Application started
+2026-02-02 11:27:24,325 - micropl.gui.calibration_panel - INFO - Starting calibration: 10 points, 0.1-1.0 W
+2026-02-02 11:27:35,077 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:28:46,267 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:28:46,497 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:28:46,619 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:28:46,638 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:28:46,661 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:28:46,672 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:28:46,672 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:28:46,673 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:28:46,685 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:28:46,686 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:28:46,687 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:28:46,687 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:28:46,902 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:28:46,917 - micropl.gui.main - INFO - Application started
+2026-02-02 11:28:55,490 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:28:56,137 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:28:58,087 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:28:59,201 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:29:00,706 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:29:02,585 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:29:05,236 - micropl.gui.monochromator_panel - INFO - Moving to 500.0 nm
+2026-02-02 11:31:51,933 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:31:52,068 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:31:52,167 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:31:52,184 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:31:52,208 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:31:52,217 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:31:52,217 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:31:52,217 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:31:52,229 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:31:52,229 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:31:52,230 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:31:52,230 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:31:52,453 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:31:52,462 - micropl.gui.main - INFO - Application started
+2026-02-02 11:34:28,116 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:34:28,331 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:34:28,427 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:34:28,445 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:34:28,468 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:34:28,479 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:34:28,479 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:34:28,480 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:34:28,492 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:34:28,493 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:34:28,493 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:34:28,493 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:34:28,718 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:34:28,727 - micropl.gui.main - INFO - Application started
+2026-02-02 11:35:31,444 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:35:31,705 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:35:31,817 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:35:31,836 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:35:31,860 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:35:31,871 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:35:31,871 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:35:31,871 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:35:31,884 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:35:31,884 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:35:31,885 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:35:31,885 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:35:32,100 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:35:32,108 - micropl.gui.main - INFO - Application started
+2026-02-02 11:37:55,457 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:37:55,700 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:37:55,812 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:37:55,829 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:37:55,854 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:37:55,863 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:37:55,863 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:37:55,864 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:37:55,875 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:37:55,876 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:37:55,876 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:37:55,877 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:37:56,099 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:37:56,109 - micropl.gui.main - INFO - Application started
+2026-02-02 11:39:12,260 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:39:12,547 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:39:12,659 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:39:12,677 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:39:12,701 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:39:12,710 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:39:12,710 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:39:12,710 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:39:12,720 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:39:12,721 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:39:12,722 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:39:12,722 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:39:12,974 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:39:12,983 - micropl.gui.main - INFO - Application started
+2026-02-02 11:41:37,957 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:41:38,245 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:41:38,362 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:41:38,380 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:41:38,405 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:41:38,414 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:41:38,414 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:41:38,415 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:41:38,427 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:41:38,427 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:41:38,428 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:41:38,428 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:41:38,677 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:41:38,687 - micropl.gui.main - INFO - Application started
+2026-02-02 11:42:03,880 - micropl.gui.monochromator_panel - INFO - Converted value to 2479.684 meV
+2026-02-02 11:42:05,678 - micropl.gui.monochromator_panel - INFO - Converted value to 500.000 nm
+2026-02-02 11:42:53,307 - micropl.gui.shutter_panel - WARNING - KDC101 not connected, cannot control shutter
+2026-02-02 11:42:54,838 - micropl.gui.shutter_panel - WARNING - KDC101 not connected, cannot control shutter
+2026-02-02 11:44:57,815 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:44:58,089 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:44:58,201 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:44:58,218 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:44:58,241 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:44:58,250 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:44:58,250 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:44:58,251 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:44:58,262 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:44:58,262 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:44:58,263 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:44:58,263 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:44:58,475 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:44:58,483 - micropl.gui.main - INFO - Application started
+2026-02-02 11:45:53,250 - micropl.gui.monochromator_panel - INFO - Moving to 501.0 nm
+2026-02-02 11:46:20,470 - micropl.gui.shutter_panel - WARNING - KDC101 not connected, cannot control shutter
+2026-02-02 11:46:21,515 - micropl.gui.shutter_panel - WARNING - KDC101 not connected, cannot control shutter
+2026-02-02 11:49:36,253 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:49:36,420 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:49:36,518 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:49:36,536 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:49:36,559 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:49:36,568 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:49:36,568 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:49:36,569 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:49:36,580 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:49:36,581 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:49:36,582 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:49:36,582 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:49:36,851 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:49:36,864 - micropl.gui.main - INFO - Application started
+2026-02-02 11:57:02,892 - __main__ - INFO - Starting MicroPL application
+2026-02-02 11:57:03,209 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 11:57:03,323 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 11:57:03,342 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 11:57:03,370 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 11:57:03,379 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 11:57:03,379 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 11:57:03,380 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 11:57:03,394 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 11:57:03,394 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 11:57:03,395 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 11:57:03,395 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 11:57:03,655 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 11:57:03,664 - micropl.gui.main - INFO - Application started
+2026-02-02 13:05:34,635 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:05:34,986 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:05:35,102 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:05:35,120 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:05:35,145 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:05:35,155 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:05:35,155 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:05:35,155 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:05:35,169 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:05:35,169 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:05:35,170 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:05:35,170 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:05:35,445 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:05:35,459 - micropl.gui.main - INFO - Application started
+2026-02-02 13:08:02,371 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:08:02,687 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:08:02,800 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:08:02,816 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:08:02,841 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:08:02,850 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:08:02,850 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:08:02,851 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:08:02,863 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:08:02,864 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:08:02,865 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:08:02,865 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:08:03,114 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:08:03,124 - micropl.gui.main - INFO - Application started
+2026-02-02 13:10:15,649 - micropl.gui.monochromator_panel - INFO - Moving to 502.0 nm
+2026-02-02 13:13:55,273 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:13:55,418 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:13:55,515 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:13:55,532 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:13:55,555 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:13:55,564 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:13:55,564 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:13:55,565 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:13:55,575 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:13:55,575 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:13:55,576 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:13:55,576 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:13:55,791 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:13:55,799 - micropl.gui.main - INFO - Application started
+2026-02-02 13:14:34,610 - micropl.gui.monochromator_panel - INFO - Target changed to 503.0 nm, triggering move.
+2026-02-02 13:14:37,992 - micropl.gui.monochromator_panel - INFO - Target changed to 502.0 nm, triggering move.
+2026-02-02 13:14:42,025 - micropl.gui.monochromator_panel - INFO - Target changed to 502.0 nm, triggering move.
+2026-02-02 13:14:44,694 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 13:14:47,978 - micropl.gui.monochromator_panel - INFO - Target changed to 510.0 nm, triggering move.
+2026-02-02 13:14:51,203 - micropl.gui.monochromator_panel - INFO - Target changed to 510.0 nm, triggering move.
+2026-02-02 13:14:51,204 - micropl.gui.monochromator_panel - INFO - Target changed to 510.0 nm, triggering move.
+2026-02-02 13:14:53,133 - micropl.gui.monochromator_panel - INFO - Converted value to 2431.063 meV
+2026-02-02 13:14:57,070 - micropl.gui.monochromator_panel - INFO - Target changed to 2427.063 meV, triggering move.
+2026-02-02 13:14:59,228 - micropl.gui.monochromator_panel - INFO - Target changed to 2427.063 meV, triggering move.
+2026-02-02 13:14:59,947 - micropl.gui.monochromator_panel - INFO - Converted value to 510.840 nm
+2026-02-02 13:15:00,673 - micropl.gui.monochromator_panel - INFO - Target changed to 510.84 nm, triggering move.
+2026-02-02 13:15:16,053 - micropl.gui.monochromator_panel - INFO - Target changed to 510.84 nm, triggering move.
+2026-02-02 13:24:53,719 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:24:54,066 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:24:54,174 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:24:54,191 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:24:54,225 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:24:54,241 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:24:54,242 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:24:54,242 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:24:54,262 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:24:54,263 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:24:54,264 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:24:54,264 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:24:54,495 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:24:54,509 - micropl.gui.main - INFO - Application started
+2026-02-02 13:24:56,971 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 13:24:59,686 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:24:59,687 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:25:01,887 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:25:01,888 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:27:50,202 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:27:50,451 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:27:50,561 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:27:50,578 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:27:50,602 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:27:50,611 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:27:50,611 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:27:50,612 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:27:50,624 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:27:50,625 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:27:50,625 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:27:50,625 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:27:50,834 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:27:50,843 - micropl.gui.main - INFO - Application started
+2026-02-02 13:27:52,550 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 13:28:28,256 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:28:28,257 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:28:32,025 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 13:28:34,080 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 13:28:42,035 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-02-02 13:28:44,799 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-02 13:28:49,485 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-02-02 13:29:47,894 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:29:47,897 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:29:47,898 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 13:29:48,763 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:29:48,763 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:29:48,763 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 13:29:49,612 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:29:49,612 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:29:49,612 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 13:50:07,524 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:50:07,787 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:50:07,905 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:50:07,924 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:50:07,951 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:50:07,961 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:50:07,961 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:50:07,962 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:50:07,975 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:50:07,976 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:50:07,977 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:50:07,977 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:50:08,215 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:50:08,236 - micropl.gui.main - INFO - Application started
+2026-02-02 13:50:10,440 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 13:50:16,805 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:50:16,807 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:50:19,577 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-02-02 13:50:21,060 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-02 13:56:23,653 - __main__ - INFO - Starting MicroPL application
+2026-02-02 13:56:23,884 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 13:56:23,998 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 13:56:24,016 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 13:56:24,040 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 13:56:24,090 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:56:24,090 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 13:56:24,091 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 13:56:24,103 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 13:56:24,103 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 13:56:24,104 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 13:56:24,104 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 13:56:24,318 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 13:56:24,326 - micropl.gui.main - INFO - Application started
+2026-02-02 13:56:38,234 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 13:56:38,235 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 13:56:40,701 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-02 13:56:42,431 - micropl.gui.live_view - INFO - View mode changed to Spectrum
+2026-02-02 13:56:46,820 - micropl.gui.live_view - INFO - View mode changed to Image
+2026-02-02 13:56:48,403 - micropl.gui.live_view - INFO - View mode changed to Spectrum
+2026-02-02 13:57:04,953 - micropl.gui.live_view - INFO - View mode changed to Image
+2026-02-02 13:57:06,804 - micropl.gui.live_view - INFO - View mode changed to Spectrum
+2026-02-02 13:57:10,985 - micropl.gui.live_view - INFO - View mode changed to Image
+2026-02-02 13:57:27,438 - micropl.gui.live_view - INFO - View mode changed to Spectrum
+2026-02-02 13:57:30,834 - micropl.gui.live_view - INFO - View mode changed to Image
+2026-02-02 13:57:34,901 - micropl.gui.live_view - INFO - Readout mode changed to FVB
+2026-02-02 13:57:38,135 - micropl.gui.live_view - INFO - Readout mode changed to Single track
+2026-02-02 14:02:17,935 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:17,942 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:17,945 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:18,308 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:18,309 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:18,309 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:18,958 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:18,958 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:18,958 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:19,677 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:19,678 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:19,678 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:21,008 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:21,008 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:21,008 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:21,525 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:21,525 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:21,525 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:21,709 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:21,710 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:21,710 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:21,909 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:21,909 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:21,909 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:22,108 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:22,109 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:22,109 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:02:22,509 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:02:22,509 - micropl.gui.live_view - WARNING - Camera Spectrometer not connected
+2026-02-02 14:02:22,509 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:45,901 - __main__ - INFO - Starting MicroPL application
+2026-02-02 14:05:46,146 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 14:05:46,260 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 14:05:46,276 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 14:05:46,300 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 14:05:46,350 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:46,350 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:46,350 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 14:05:46,363 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 14:05:46,363 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 14:05:46,364 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 14:05:46,364 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 14:05:46,594 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 14:05:46,602 - micropl.gui.main - INFO - Application started
+2026-02-02 14:05:48,006 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 14:05:49,255 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:49,257 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:49,257 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:50,388 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:50,388 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:50,388 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:51,104 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:51,104 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:51,104 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:51,422 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:51,422 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:51,422 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:51,922 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:51,922 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:51,923 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:52,121 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:52,122 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:52,122 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:52,472 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:52,473 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:52,473 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:52,771 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:52,772 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:52,772 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:53,038 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:53,038 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:53,038 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:53,489 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:53,489 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:53,489 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:05:56,705 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:05:56,705 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:05:56,705 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:49,368 - __main__ - INFO - Starting MicroPL application
+2026-02-02 14:10:49,573 - micropl.hardware.manager - INFO - Hardware manager initialized
+2026-02-02 14:10:49,685 - micropl.gui.calibration_panel - INFO - Calibration panel initialized
+2026-02-02 14:10:49,704 - micropl.gui.sequence_editor - INFO - Sequence editor initialized
+2026-02-02 14:10:49,726 - micropl.gui.measurement_panel - INFO - Measurement panel initialized
+2026-02-02 14:10:49,776 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:49,776 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:49,776 - micropl.gui.live_view - INFO - Live view initialized
+2026-02-02 14:10:49,788 - micropl.gui.monochromator_panel - INFO - Monochromator panel initialized
+2026-02-02 14:10:49,788 - micropl.gui.powermeter_panel - INFO - Power meter panel initialized
+2026-02-02 14:10:49,789 - micropl.gui.kdc101_panel - INFO - KDC101 panel initialized
+2026-02-02 14:10:49,789 - micropl.gui.shutter_panel - INFO - Shutter panel initialized
+2026-02-02 14:10:49,997 - micropl.gui.main - INFO - Main window initialized
+2026-02-02 14:10:50,005 - micropl.gui.main - INFO - Application started
+2026-02-02 14:10:51,336 - micropl.gui.monochromator_panel - INFO - Target changed to 500.0 nm, triggering move.
+2026-02-02 14:10:52,515 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:52,515 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:52,516 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:53,382 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:53,383 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:53,383 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:53,982 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:53,982 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:53,983 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:54,365 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:54,365 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:54,366 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:54,849 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:54,849 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:54,849 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:55,515 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:55,515 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:55,516 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:56,082 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:56,083 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:56,083 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:56,249 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:56,249 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:56,249 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:56,416 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:56,416 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:56,416 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:10:57,349 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:10:57,349 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:10:57,349 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:11:12,834 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:11:12,835 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:11:12,836 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:11:13,483 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:11:13,483 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:11:13,483 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:11:15,300 - micropl.gui.live_view - ERROR - Camera not connected
+2026-02-02 14:11:15,933 - micropl.gui.live_view - INFO - Readout mode changed to Image
+2026-02-02 14:11:15,933 - micropl.gui.live_view - WARNING - Camera Visualisation not connected
+2026-02-02 14:11:15,934 - micropl.gui.live_view - ERROR - Selected camera not connected
+2026-02-02 14:11:23,917 - micropl.gui.shutter_panel - WARNING - KDC101 not connected, cannot control shutter
+2026-02-02 14:11:25,249 - micropl.gui.shutter_panel - WARNING - KDC101 not connected, cannot control shutter

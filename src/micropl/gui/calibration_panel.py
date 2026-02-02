@@ -3,12 +3,11 @@ Calibration panel for power calibration.
 """
 
 import logging
-from PyQt6.QtWidgets import (
+from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QPushButton, QLabel, QSpinBox, QDoubleSpinBox,
-    QTableWidget, QTableWidgetItem
+    QTableWidget, QTableWidgetItem, Qt
 )
-from PyQt6.QtCore import Qt
 
 logger = logging.getLogger(__name__)
 

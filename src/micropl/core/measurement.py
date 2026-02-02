@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import numpy as np
 
+from ..hardware.manager import HardwareManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,25 +51,43 @@ class MeasurementController:
     """Control elementary measurement acquisitions."""
 
     def __init__(self, hardware_config: Optional[Dict[str, Any]] = None):
-        self.hardware = hardware_config or {}
+        self.hardware_config = hardware_config or {}
+        self.hw = HardwareManager()
 
-        # References to hardware (set externally)
-        self.spectrometer = None
-        self.camera = None
-        self.power_meter = None
-        self.stage = None
+    @property
+    def spectrometer(self):
+        return self.hw.get_instrument('mono')
+
+    @property
+    def camera(self):
+        return self.hw.get_instrument('camera')
+
+    @property
+    def power_meter(self):
+        return self.hw.get_instrument('power_meter')
+
+    @property
+    def stage(self):
+        return self.hw.get_instrument('stage')
 
     def set_hardware(self, **kwargs) -> None:
         """
-        Set hardware references.
+        Set hardware references in the manager.
 
         Args:
             **kwargs: Hardware objects (spectrometer, camera, power_meter, stage)
         """
+        # Map controller names to manager names
+        mapping = {
+            'spectrometer': 'mono',
+            'camera': 'camera',
+            'power_meter': 'power_meter',
+            'stage': 'stage'
+        }
         for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-                logger.info(f"Hardware set: {key}")
+            manager_key = mapping.get(key, key)
+            self.hw.instruments[manager_key] = value
+            logger.info(f"Hardware set in manager: {manager_key}")
 
     def acquire_spectrum(self, sample_number: int,
                         power: float,

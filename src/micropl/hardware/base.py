@@ -100,6 +100,11 @@ class Camera(Instrument):
         """Stop continuous acquisition."""
         pass
 
+    @abstractmethod
+    def is_acquiring(self) -> bool:
+        """Check if camera is currently acquiring."""
+        pass
+
 
 class MotorizedDevice(Instrument):
     """Abstract interface for motorized devices."""

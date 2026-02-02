@@ -28,6 +28,7 @@ def nm_to_meV(wavelength_nm: float) -> float:
     return energy_meV
 
 
+
 def meV_to_nm(energy_meV: float) -> float:
     """
     Convert energy in meV to wavelength in nm.
@@ -44,6 +45,36 @@ def meV_to_nm(energy_meV: float) -> float:
     wavelength_nm = wavelength_m * 1e9
 
     return wavelength_nm
+
+
+def nm_to_inv_cm(wavelength_nm: float) -> float:
+    """
+    Convert wavelength in nm to wavenumber in cm-1.
+
+    Args:
+        wavelength_nm: Wavelength in nanometers
+
+    Returns:
+        Wavenumber in cm-1
+    """
+    if wavelength_nm == 0:
+        return 0
+    return 1e7 / wavelength_nm
+
+
+def inv_cm_to_nm(wavenumber_cm: float) -> float:
+    """
+    Convert wavenumber in cm-1 to wavelength in nm.
+
+    Args:
+        wavenumber_cm: Wavenumber in cm-1
+
+    Returns:
+        Wavelength in nanometers
+    """
+    if wavenumber_cm == 0:
+        return 0
+    return 1e7 / wavenumber_cm
 
 
 def wavelength_to_frequency(wavelength_nm: float) -> float:

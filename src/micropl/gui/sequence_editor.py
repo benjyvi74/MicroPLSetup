@@ -3,13 +3,11 @@ Sequence editor for n-P-t table.
 """
 
 import logging
-from PyQt6.QtWidgets import (
+from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QToolBar, QFileDialog
+    QToolBar, QFileDialog, Qt, QAction
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
 
 logger = logging.getLogger(__name__)
 

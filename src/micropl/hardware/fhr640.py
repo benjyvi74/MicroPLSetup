@@ -1,227 +1,396 @@
 """
-Horiba FHR640 spectrometer driver using Jobin Yvon (JY) COM components.
+Horiba FHR640 spectrometer driver using native RS-232 serial protocol.
 """
 
 import logging
 import time
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple
 import numpy as np
+
+try:
+    import serial
+except ImportError:
+    serial = None
 
 from .base import Spectrometer
 
 logger = logging.getLogger(__name__)
 
-# Try to import win32com
-try:
-    import win32com.client
-    import pythoncom
-    WIN32COM_AVAILABLE = True
-except ImportError:
-    logger.warning("win32com not available. Driver will only work on Windows with pywin32 installed.")
-    WIN32COM_AVAILABLE = False
-
 
 class FHR640(Spectrometer):
     """
-    Driver for Horiba FHR640 spectrometer using HJY COM interface.
+    Driver for Horiba FHR640 spectrometer using native Serial commands.
     
-    Requires:
-    - Horiba 'Hardware Configuration Control' software installed.
-    - pywin32 package (pip install pywin32).
+    Protocol: 19200 Baud, 8N1.
+    Cable: Null-Modem RS-232.
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
-        # The device name as defined in the Horiba Hardware Configuration tool (e.g., 'Mono1')
-        self.device_name = self.config.get('device_name', 'Mono1')
+        self.port = self.config.get('port', 'COM1')
+        self.baudrate = self.config.get('baudrate', 19200)
         self._center_wavelength = self.config.get('center_wavelength', 500)
-        self._grating = self.config.get('grating', None) # Index or lines/mm
+        # Based on manual Appendix 1 (params2.png): 157.48 steps / mm
+        # 157.48 steps / 1000 um = 0.15748 steps / um
+        self.steps_per_um = self.config.get('steps_per_um', 0.15748) 
         
-        # Internal COM objects
-        self._mono = None
-        self._hw_config = None
+        # Internal state
+        self._serial = None
 
     def connect(self) -> None:
-        """Connect to the FHR640 via COM interface."""
+        """Connect to the FHR640 using pyserial and perform startup sequence."""
         if self._connected:
             return
 
-        if not WIN32COM_AVAILABLE:
-            raise RuntimeError("win32com is not installed. Install with: pip install pywin32")
+        if serial is None:
+            raise RuntimeError("pyserial is not installed. Install with: pip install pyserial")
 
-        logger.info(f"Connecting to Horiba FHR640 (Device: {self.device_name})")
+        logger.info(f"Connecting to FHR640 on {self.port} at {self.baudrate} baud")
 
         try:
-            # Initialize COM in this thread
-            pythoncom.CoInitialize()
+            self._serial = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=2.0
+            )
 
-            # 1. Create Hardware Config object to find the device
-            self._hw_config = win32com.client.Dispatch("JYHardwareLib.HardwareConfig")
-            self._hw_config.Load()
-            
-            # Find the device ID by name
-            device_id = ""
-            num_devices = self._hw_config.GetDeviceCount()
-            for i in range(num_devices):
-                d_id = self._hw_config.GetDeviceID(i)
-                d_name = self._hw_config.GetDeviceName(d_id)
-                if d_name == self.device_name:
-                    device_id = d_id
+            # Clear buffers to start clean
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
+            time.sleep(0.2) # Wait for hardware to stabilize
+
+            # --- STARTUP HANDSHAKE (Page 9) ---
+            # Send <Space> multiple times to wake up or clear the pipe
+            logger.debug("Checking controller status...")
+            for _ in range(3):
+                self._serial.write(b' ')
+                time.sleep(0.1)
+                if self._serial.in_waiting:
                     break
             
-            if not device_id:
-                available_devices = [self._hw_config.GetDeviceName(self._hw_config.GetDeviceID(i)) for i in range(num_devices)]
-                raise RuntimeError(f"Device '{self.device_name}' not found. Available: {available_devices}")
+            response = self._serial.read(self._serial.in_waiting)
+            logger.debug(f"Hardware initial response: {response}")
 
-            # 2. Create Monochromator object
-            self._mono = win32com.client.Dispatch("JYMonoLib.Monochromator")
-            self._mono.Uniqueid = device_id
-            
-            # 3. Load and Initialize
-            self._mono.Load()
-            logger.info("Initializing FHR640 hardware... this may take a while.")
-            self._mono.Initialize()
-            
-            # Wait for initialization to complete
-            while self._mono.IsBusy:
-                time.sleep(0.5)
-            
-            self._connected = True
-            logger.info("FHR640 connected and initialized successfully")
+            if b'F' in response:
+                logger.info("Controller is already in Intelligent Main mode. Ready.")
+                self._connected = True
+                self._serial.reset_input_buffer() # Final clean
+                return
 
-            # Set initial wavelength if specified
-            self.set_center_wavelength(self._center_wavelength)
+            if b'*' in response:
+                logger.info("Autobaud successful. Switching to Intelligent Mode...")
+                self._serial.write(bytes([247]))
+                time.sleep(0.1)
+                ack = self._serial.read(self._serial.in_waiting)
+            elif b'B' in response:
+                logger.info("Controller in Boot mode. Starting Main Program...")
+            elif b'\x1b' in response: # Escape
+                logger.info("Controller in Terminal mode. Switching...")
+                self._serial.write(bytes([248]))
+                time.sleep(0.2)
+                self._serial.write(bytes([247]))
+                time.sleep(0.1)
+                self._serial.read(self._serial.in_waiting)
+            else:
+                # If nothing, try forced startup
+                logger.debug("Unknown status. Attempting forced startup...")
+                self._serial.write(bytes([247]))
+                time.sleep(0.1)
+
+            # Start Main Program if we weren't in 'F'
+            logger.info("Transferring to Main Program...")
+            self._serial.write(b'O2000\x00')
+            time.sleep(1.0) # Larger delay for safety
+            
+            # Final check - should respond to <Space> with 'F' or return '*'
+            self._serial.reset_input_buffer()
+            self._serial.write(b' ')
+            time.sleep(0.1)
+            final_check = self._serial.read(self._serial.in_waiting)
+            
+            if b'F' in final_check or b'*' in final_check:
+                self._connected = True
+                logger.info("FHR640 connected and initialized")
+                # Set default mirror positions
+                self.set_mirror(port='entrance', position='direct')
+                self.set_mirror(port='exit', position='direct')
+            else:
+                logger.warning(f"Startup check returned unexpected: {final_check}. Proceeding anyway.")
+                self._connected = True
+                # Set default mirror positions
+                self.set_mirror(port='entrance', position='direct')
+                self.set_mirror(port='exit', position='direct')
 
         except Exception as e:
             logger.error(f"Failed to connect to FHR640: {e}")
+            if self._serial:
+                self._serial.close()
             self._connected = False
-            self.disconnect()
             raise
 
     def disconnect(self) -> None:
-        """Disconnect from the spectrometer."""
-        if self._mono is not None:
+        """Close serial connection."""
+        if self._serial and self._serial.is_open:
             logger.info("Disconnecting FHR640")
-            try:
-                # Some versions use Unload or Close
-                if hasattr(self._mono, 'Unload'):
-                    self._mono.Unload()
-            except Exception as e:
-                logger.error(f"Error during FHR640 disconnect: {e}")
-            finally:
-                self._mono = None
-                self._hw_config = None
-                self._connected = False
-                # Uninitialize COM for this thread
-                try:
-                    pythoncom.CoUninitialize()
-                except:
-                    pass
+            self._serial.close()
+        self._serial = None
+        self._connected = False
 
     def is_connected(self) -> bool:
         """Check connection status."""
-        return self._connected and self._mono is not None
+        return self._connected and self._serial and self._serial.is_open
 
-    def get_info(self) -> Dict[str, Any]:
-        """Get spectrometer information."""
-        info = {
-            'model': 'FHR640',
-            'device_name': self.device_name,
-            'connected': self.is_connected(),
-        }
+    def _send_command(self, cmd: str) -> str:
+        """Send a standard command and wait for confirmation 'o'."""
+        if not self.is_connected():
+            raise RuntimeError("Device not connected")
+            
+        full_cmd = f"{cmd}\r".encode()
+        self._serial.write(full_cmd)
+        
+        # Read confirmation
+        ack = self._serial.read(1)
+        if ack == b'o':
+            # Parameters (if any) are followed by \r
+            response = self._serial.read_until(b'\r').decode().strip()
+            return response
+        elif ack == b'b':
+            # Clear buffer on error
+            self._serial.reset_input_buffer()
+            raise RuntimeError(f"FHR640 returned BAD command error for: {cmd}")
+        else:
+            # Clear buffer on unexpected
+            self._serial.reset_input_buffer()
+            raise RuntimeError(f"FHR640 returned unexpected response: {ack}")
 
-        if self.is_connected():
-            try:
-                info['current_wavelength'] = self._mono.GetCurrentWavelength()
-                info['current_grating'] = self._mono.GetCurrentGrating()
-                # Check for slit positions if needed
-            except Exception as e:
-                logger.warning(f"Could not retrieve full FHR640 info: {e}")
+    def is_busy(self) -> bool:
+        """Check if motor is busy."""
+        # Command 'E' is MOTOR BUSY STATUS. 
+        # Response is exactly 2 bytes: 'o' (ack) then 'q' (busy) or 'z' (ready)
+        self._serial.write(b'E')
+        ack = self._serial.read(1)
+        if ack != b'o':
+            logger.debug(f"Unexpected ack from E check: {ack}")
+            return False # Fallback
+            
+        status = self._serial.read(1)
+        if status == b'q': # Busy
+            return True
+        elif status == b'z': # Not Busy
+            return False
+        else:
+            logger.debug(f"Unexpected status char from E check: {status}")
+            return False
 
-        return info
+    def wait_until_ready(self, timeout: float = 30.0):
+        """Poll until the device is no longer busy."""
+        start_time = time.time()
+        while self.is_busy():
+            if time.time() - start_time > timeout:
+                raise TimeoutError("FHR640 movement timed out")
+            time.sleep(0.1)
 
     def set_center_wavelength(self, wavelength: float) -> None:
         """
-        Set center wavelength.
-
-        Args:
-            wavelength: Wavelength in nm
+        Move to absolute wavelength position (in nm).
+        Command: Z61,0,[wavelength]<CR>
         """
-        if not self.is_connected():
-            raise RuntimeError("Device not connected")
-
         logger.info(f"Moving FHR640 to {wavelength} nm")
-        try:
-            self._mono.MoveToWavelength(wavelength)
-            
-            # Wait for move to complete
-            while self._mono.IsBusy:
-                time.sleep(0.1)
-                
-            self._center_wavelength = wavelength
-            logger.info(f"Reached {wavelength} nm")
-        except Exception as e:
-            logger.error(f"Failed to move FHR640: {e}")
-            raise
+        # Format Z61,[mono_index],[wavelength]
+        cmd = f"Z61,0,{wavelength:.3f}"
+        self._send_command(cmd)
+        
+        # Wait for move to start (sometimes moves are fast or slow to report busy)
+        time.sleep(0.2)
+        self.wait_until_ready()
+        
+        self._center_wavelength = wavelength
+        logger.info(f"Reached {wavelength} nm")
 
-    def set_grating(self, grating_index: int) -> None:
+    def set_spectral_position(self, value: float, unit: str = "nm") -> None:
         """
-        Set grating turret position.
-
+        Set spectrometer position in nm, meV, or cm-1.
+        
         Args:
-            grating_index: Index of the grating in the turret (0, 1, 2...)
+            value: The position value in the specified unit.
+            unit: 'nm', 'meV', or 'cm-1'.
         """
-        if not self.is_connected():
-            raise RuntimeError("Device not connected")
-
-        logger.info(f"Switching FHR640 to grating index {grating_index}")
-        try:
-            self._mono.MoveToGrating(grating_index)
+        unit = unit.lower().strip()
+        if unit == "nm":
+            target_nm = value
+        elif unit == "mev":
+            # E = hc / lambda => lambda = 1239.84193 / E (meV)
+            target_nm = 1239.84193 / value
+        elif unit == "cm-1":
+            # lambda (nm) = 10,000,000 / nu (cm-1)
+            target_nm = 10000000.0 / value
+        else:
+            raise ValueError(f"Unsupported unit: {unit}. Use 'nm', 'meV', or 'cm-1'.")
             
-            # Wait for rotation to complete
-            while self._mono.IsBusy:
-                time.sleep(0.5)
-                
-            logger.info(f"Switched to grating {grating_index}")
-        except Exception as e:
-            logger.error(f"Failed to switch grating: {e}")
-            raise
+        logger.info(f"FHR640: Setting spectral position to {value} {unit} ({target_nm:.3f} nm)")
+        self.set_center_wavelength(target_nm)
 
-    def set_slit_width(self, width: float, slit_id: int = 0) -> None:
+    def calibrate(self, wavelength: float) -> None:
         """
-        Set slit width.
+        Set (calibrate) the current physical position to a specific wavelength.
+        Use this if the spectrometer reading doesn't match a known laser line.
+        Command: Z60,0,[wavelength]<CR>
+        """
+        logger.info(f"Calibrating FHR640: Defining current position as {wavelength} nm")
+        # Format Z60,[mono_index],[wavelength]
+        cmd = f"Z60,0,{wavelength:.3f}"
+        self._send_command(cmd)
+        self._center_wavelength = wavelength
+        logger.info(f"Calibration successful: Current position is now {wavelength} nm")
 
+    def get_current_wavelength(self) -> float:
+        """Read current wavelength from hardware."""
+        # Command: Z62,0<CR>
+        resp = self._send_command("Z62,0")
+        try:
+            val = float(resp)
+            self._center_wavelength = val
+            return val
+        except ValueError:
+            return self._center_wavelength
+
+    def set_grating(self, index: int) -> None:
+        """
+        Select grating index (0, 1, or 2).
+        Command: Z451,0,0,0,[index]<CR>
+        """
+        logger.info(f"FHR640: Selecting grating index {index}")
+        # Format Z451,[mono],[device_type],[device_num],[position]
+        cmd = f"Z451,0,0,0,{index}"
+        self._send_command(cmd)
+        
+        # Turret movement can be slow
+        start_time = time.time()
+        time.sleep(1.0) # Ensure it has time to start moving
+        while True:
+            # Command Z453 is Index Device Status
+            # Format returns 'o', then 'z\r' (ready) or 'q\r' (busy)
+            try:
+                status_resp = self._send_command("Z453,0,0,0")
+                if status_resp == 'z': # Not busy
+                    break
+            except Exception as e:
+                logger.warning(f"Error checking turret status: {e}")
+                
+            if time.time() - start_time > 60:
+                raise TimeoutError("FHR640 grating switch timed out")
+            time.sleep(0.5)
+            
+        logger.info(f"FHR640: Switched to grating {index}")
+
+    def set_grating_by_density(self, lines_per_mm: int) -> None:
+        """
+        Switch grating by lines/mm density.
+        Default Mapping: 600 -> 0, 1200 -> 1, 1800 -> 2.
+        """
+        mapping = {600: 0, 1200: 1, 1800: 2}
+        if lines_per_mm not in mapping:
+            raise ValueError(f"Grating {lines_per_mm} g/mm not in default mapping (600, 1200, 1800).")
+        
+        self.set_grating(mapping[lines_per_mm])
+
+    def acc_is_busy(self) -> bool:
+        """Check if any accessory (swings, shutters) is busy."""
+        # Command 'l' (lowercase L) is ACC BUSY CHECK
+        self._serial.write(b'l')
+        ack = self._serial.read(1)
+        if ack != b'o':
+            return False
+            
+        status = self._serial.read(1)
+        return status == b'q'
+
+    def wait_acc_ready(self, timeout: float = 30.0):
+        """Wait for mirror/shutter movement."""
+        start_time = time.time()
+        while self.acc_is_busy():
+            if time.time() - start_time > timeout:
+                raise TimeoutError("FHR640 accessory movement timed out")
+            time.sleep(0.2)
+
+    def set_mirror(self, port: str = "entrance", position: str = "direct") -> None:
+        """
+        Control swing mirrors for Entrance or Exit.
+        
         Args:
-            width: Slit width in mm (note: HJY API often uses mm, not um)
-            slit_id: Slit identifier (0 for entrance, 1 for exit, etc.)
+            port: 'entrance' or 'exit'
+            position: 'direct' (Axial/Front) or 'side' (Lateral)
         """
-        if not self.is_connected():
-            raise RuntimeError("Device not connected")
-
-        logger.info(f"Setting FHR640 slit {slit_id} to {width} mm")
-        try:
-            # The exact method name can vary, often it's MoveToSlitWidth
-            self._mono.MoveToSlitWidth(slit_id, width)
+        port = port.lower().strip()
+        pos = position.lower().strip()
+        
+        # Command map from manual 10.4
+        # c0: ENTR SIDE, d0: ENTR FRONT
+        # e0: EXIT SIDE, f0: EXIT FRONT
+        cmd_map = {
+            ("entrance", "side"): "c0",
+            ("entrance", "direct"): "d0",
+            ("entrance", "front"): "d0",
+            ("exit", "side"): "e0",
+            ("exit", "direct"): "f0",
+            ("exit", "front"): "f0",
+        }
+        
+        key = (port, pos)
+        if key not in cmd_map:
+            raise ValueError(f"Invalid mirror configuration: {port} - {pos}")
             
-            while self._mono.IsBusy:
-                time.sleep(0.1)
-                
-            logger.info(f"Slit {slit_id} set to {width} mm")
-        except Exception as e:
-            logger.error(f"Failed to set slit width: {e}")
-            raise
+        cmd = cmd_map[key]
+        logger.info(f"FHR640: Moving {port} mirror to {pos} position (Command: {cmd})")
+        
+        # These commands return 'o' then return control
+        self._serial.write(f"{cmd}\r".encode())
+        ack = self._serial.read(1)
+        if ack != b'o':
+            raise RuntimeError(f"FHR640 rejected mirror command {cmd}: {ack}")
+            
+        # Optional: wait for accessory to reach position
+        # self.wait_acc_ready()
+
+    def set_slit_width(self, width_um: float, slit_id: int = 0) -> None:
+        """
+        Set slit width in micrometers.
+        slit_id: 0 = Front Entrance, 2 = Front Exit (standard)
+        Command: k0,[slit_id],[steps]<CR> 
+        """
+        steps = int(width_um * self.steps_per_um)
+        logger.info(f"FHR640: Setting slit {slit_id} to {width_um} um ({steps} steps)")
+        
+        # Slit Move Relative is 'k'. 
+        # Note: The manual says 'k' is relative, but for autocalibrating 
+        # monos it often behaves as absolute from 0 or is the standard way to move.
+        cmd = f"k0,{slit_id},{steps}"
+        self._send_command(cmd)
+        self.wait_until_ready()
+
+    def get_slit_width(self, slit_id: int = 0) -> float:
+        """
+        Read slit width in micrometers.
+        Command: j0,[slit_id]<CR>
+        """
+        # Command 'j' is SLIT READ POSITION
+        resp = self._send_command(f"j0,{slit_id}")
+        try:
+            steps = int(resp)
+            return steps / self.steps_per_um
+        except ValueError:
+            return 0.0
 
     def acquire_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Acquire spectrum. 
-        Note: The FHR640 is just the monochromator. 
-        Acquisition is usually handled by the detector (Andor Camera).
-        """
-        raise NotImplementedError("Use AndorCamera to acquire spectrum. FHR640 is for wavelength control.")
+        raise NotImplementedError("Use AndorCamera for acquisition. FHR640 is for wavelength control.")
 
-    def __enter__(self):
-        self.connect()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.disconnect()
+    def get_info(self) -> Dict[str, Any]:
+        return {
+            'model': 'FHR640 (Serial)',
+            'port': self.port,
+            'connected': self.is_connected(),
+            'wavelength': self._center_wavelength
+        }

@@ -1,10 +1,10 @@
 """
-Threading utilities for PyQt6 applications.
+Threading utilities for Qt applications.
 """
 
 import logging
 from typing import Callable, Any, Optional
-from PyQt6.QtCore import QThread, QObject, pyqtSignal
+from ..qt import QThread, QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
 

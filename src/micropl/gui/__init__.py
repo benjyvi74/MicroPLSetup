@@ -1,1 +1,1 @@
-"""PyQt6 graphical user interface."""
+"""Qt graphical user interface."""

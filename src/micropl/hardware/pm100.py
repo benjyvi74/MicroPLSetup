@@ -89,12 +89,61 @@ class PM100(PowerMeter):
         if self.is_connected():
             try:
                 info['wavelength'] = self.get_wavelength()
-                # Get device info from pylablib if available
                 info['device_info'] = self._dev.get_device_info()
+                sensor_info = self.get_sensor_info()
+                info['sensor_model'] = sensor_info.get('model', 'Unknown')
+                info['sensor_sn'] = sensor_info.get('serial', 'Unknown')
             except Exception as e:
                 logger.warning(f"Could not retrieve full PM100 info: {e}")
 
         return info
+
+    def get_sensor_info(self) -> Dict[str, str]:
+        """Get connected sensor information."""
+        if not self.is_connected():
+            return {}
+        try:
+            # pylablib PM160 usually has get_sensor_info
+            if hasattr(self._dev, 'get_sensor_info'):
+                return self._dev.get_sensor_info()
+        except Exception:
+            pass
+        return {}
+
+    def get_ranges(self) -> list:
+        """Get available measurement ranges."""
+        if not self.is_connected():
+            return []
+        try:
+            # Some devices return a list of floats (in Watts)
+            if hasattr(self._dev, 'get_ranges'):
+                return self._dev.get_ranges()
+        except Exception:
+            pass
+        return []
+
+    def get_beam_diameter(self) -> float:
+        """Get beam diameter in mm."""
+        if not self.is_connected():
+            return 1.0
+        try:
+            if hasattr(self._dev, 'get_beam_diameter'):
+                return self._dev.get_beam_diameter()
+        except Exception:
+            pass
+        return 1.0
+
+    def set_beam_diameter(self, diameter: float) -> None:
+        """Set beam diameter in mm."""
+        if not self.is_connected():
+            raise RuntimeError("Device not connected")
+        try:
+            if hasattr(self._dev, 'set_beam_diameter'):
+                self._dev.set_beam_diameter(diameter)
+                logger.info(f"Beam diameter set to {diameter} mm")
+        except Exception as e:
+            logger.error(f"Error setting beam diameter: {e}")
+            raise
 
     def read_power(self) -> float:
         """
@@ -144,15 +193,57 @@ class PM100(PowerMeter):
             raise RuntimeError("Device not connected")
 
         try:
-            # pylablib usually provides set_range or similar
-            if hasattr(self._dev, 'set_range'):
-                self._dev.set_range(range_value)
-            elif range_value == 'auto' and hasattr(self._dev, 'set_autorange'):
-                self._dev.set_autorange(True)
+            if range_value == 'auto':
+                self.set_autorange(True)
+            else:
+                # pylablib usually provides set_range or similar
+                if hasattr(self._dev, 'set_range'):
+                    self._dev.set_range(float(range_value))
             
             logger.info(f"Range set to {range_value}")
         except Exception as e:
             logger.error(f"Error setting range: {e}")
+            raise
+
+    def set_autorange(self, enabled: bool) -> None:
+        """Enable or disable auto-ranging."""
+        if not self.is_connected():
+            raise RuntimeError("Device not connected")
+        
+        try:
+            self._dev.set_autorange(enabled)
+            logger.info(f"Auto-range set to {enabled}")
+        except Exception as e:
+            logger.error(f"Error setting auto-range: {e}")
+            raise
+
+    def get_autorange(self) -> bool:
+        """Check if auto-ranging is enabled."""
+        if not self.is_connected():
+            return True
+        try:
+            return self._dev.get_autorange()
+        except Exception:
+            return True
+
+    def get_averaging_count(self) -> int:
+        """Get measurement averaging count."""
+        if not self.is_connected():
+            return 1
+        try:
+            return self._dev.get_averaging_count()
+        except Exception:
+            return 1
+
+    def set_averaging_count(self, count: int) -> None:
+        """Set measurement averaging count."""
+        if not self.is_connected():
+            raise RuntimeError("Device not connected")
+        try:
+            self._dev.set_averaging_count(count)
+            logger.info(f"Averaging count set to {count}")
+        except Exception as e:
+            logger.error(f"Error setting averaging count: {e}")
             raise
 
     def get_wavelength(self) -> float:
@@ -173,9 +264,11 @@ class PM100(PowerMeter):
 
         logger.info("Performing zero calibration")
         try:
-            # Some Thorlabs PMs support auto-zeroing
+            # Pylablib PM160 uses 'zero' or 'start_zero'
             if hasattr(self._dev, 'zero'):
                 self._dev.zero()
+            elif hasattr(self._dev, 'start_zero'):
+                self._dev.start_zero()
             else:
                 logger.warning("Zeroing not supported by this device model in pylablib")
         except Exception as e:

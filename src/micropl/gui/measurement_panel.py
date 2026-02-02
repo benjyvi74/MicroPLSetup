@@ -3,13 +3,14 @@ Measurement panel for running experiments and viewing results.
 """
 
 import logging
-from PyQt6.QtWidgets import (
+from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QProgressBar, QGroupBox, QTextEdit
+    QLabel, QProgressBar, QGroupBox, QTextEdit,
+    Qt, QTimer
 )
-from PyQt6.QtCore import Qt, QTimer
 
 from .plot import PlotWidget
+from ..hardware.manager import HardwareManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class MeasurementPanel(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.hw = HardwareManager()
         self._init_ui()
         self._running = False
         logger.info("Measurement panel initialized")
@@ -127,6 +129,14 @@ class MeasurementPanel(QWidget):
 
         self.status_label.setText("Status: Running")
         self.log_message("Measurement started")
+
+        # Check for spectrometer camera
+        camera = self.hw.spec_camera
+        if not camera or not camera.is_connected():
+            logger.error("Spectrometer camera not connected")
+            self.log_message("Error: Spectrometer camera not connected")
+            self.stop_measurement()
+            return
 
         # TODO: Get sequence from sequence editor
         # TODO: Create Experiment instance
