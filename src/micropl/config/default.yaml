@@ -4,37 +4,43 @@
 hardware:
   # Thorlabs KDC101 (motorized polarizer / TTL shutter)
   kdc101:
-    serial_number: "27500125"  # Replace with your device serial number
+    serial_number: "27271777"
     port: null
     kinesis_path: "C:\\Program Files\\Thorlabs\\Kinesis"  # Path to Kinesis DLLs
     # Motor parameters for unit conversions (default for PRM1-Z8 rotation mount)
     steps_per_rev: 1919.64186
     gbox_ratio: 1.0
     pitch: 1.0
-    velocity: 10.0  # deg/s (note: set_velocity not fully implemented yet)
-    acceleration: 10.0  # deg/s²
+    velocity: 25.0  # deg/s (note: set_velocity not fully implemented yet)
+    acceleration: 25.0  # deg/s²
 
   # PM100 Power Meter
   pm100:
-    port: null
-    wavelength: 532  # nm
+    port: "USB0::0x1313::0x8072::P2000083::INSTR"
+    wavelength: 750  # nm
     range: auto
 
   # FHR640 Horiba Spectrometer
   fhr640:
-    port: null
-    grating: 600  # lines/mm
-    center_wavelength: 700  # nm
+    port: "COM1"
+    grating: 1200  # lines/mm
+    center_wavelength: 900  # nm
     slit_width: 100  # µm
 
-  # Andor Cameras (DL604M, DU420, DU491, DU420A-BR-DD iDus)
-  andor_camera:
-    model: DU420A-BR-DD  # iDus 420A-BR-DD
-    camera_index: 0  # Camera index (0 = first camera)
-    exposure_time: 0.1  # seconds
-    temperature: -70  # °C (set during initialization)
-    fan_mode: on  # "on" or "off"
-    readout_mode: null  # null = use default, or specify amplifier mode index
+  # Andor Cameras
+  vis_camera:
+    model: "DL604M-#VP"
+    camera_index: 0
+    exposure_time: 0.1
+    temperature: -20
+    fan_mode: "full"
+    
+  spec_camera:
+    model: "DU420A-BR-DD"
+    camera_index: 1
+    exposure_time: 0.1
+    temperature: -70
+    fan_mode: "full"
 
   # XY Stage
   stage:

@@ -11,6 +11,8 @@ from ..qt import (
 )
 
 from ..hardware.manager import HardwareManager
+import time
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +107,75 @@ class PMSettingsDialog(QDialog):
         }
 
 
+class PowerTraceWindow(QDialog):
+    """Window for displaying continuous power trace using PyQtGraph."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Power vs. Time Trace")
+        self.resize(800, 400)
+        
+        # Data buffers
+        self.max_points = 1000
+        self.times = deque(maxlen=self.max_points)
+        self.powers = deque(maxlen=self.max_points)
+        self.start_time = time.time()
+        
+        self._init_ui()
+        logger.debug("PowerTraceWindow initialized")
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        from .plot import PlotWidget
+        self.plot = PlotWidget()
+        self.plot.set_labels("Time (s)", "Power")
+        layout.addWidget(self.plot)
+        
+        controls = QHBoxLayout()
+        self.clear_btn = QPushButton("Clear Trace")
+        self.clear_btn.clicked.connect(self.clear_data)
+        controls.addWidget(self.clear_btn)
+        
+        controls.addStretch()
+        self.status_label = QLabel("Tracing...")
+        controls.addWidget(self.status_label)
+        
+        layout.addLayout(controls)
+
+    def add_point(self, power_watts: float):
+        """Add a new power point to the trace."""
+        current_time = time.time() - self.start_time
+        self.times.append(current_time)
+        self.powers.append(power_watts)
+        
+        # Determine best display unit based on the latest value
+        abs_p = abs(power_watts)
+        if abs_p < 1e-9: 
+            unit, scale = "pW", 1e12
+        elif abs_p < 1e-6:
+            unit, scale = "nW", 1e9
+        elif abs_p < 1e-3:
+            unit, scale = "µW", 1e6
+        elif abs_p < 1:
+            unit, scale = "mW", 1e3
+        else:
+            unit, scale = "W", 1.0
+            
+        self.plot.set_labels("Time (s)", f"Power ({unit})")
+        
+        # Scale all points to the same unit for display
+        display_powers = [p * scale for p in self.powers]
+        self.plot.update_plot(list(self.times), display_powers)
+
+    def clear_data(self):
+        """Reset the trace data."""
+        self.times.clear()
+        self.powers.clear()
+        self.start_time = time.time()
+        self.plot.clear()
+
+
 class PowerMeterPanel(QWidget):
     """Widget for power meter control and display."""
 
@@ -119,6 +190,8 @@ class PowerMeterPanel(QWidget):
         self.timer.start(500)  # 2 Hz update
         
         self._was_connected = False
+        self._background_offset = 0.0
+        self.trace_window = None
         logger.info("Power meter panel initialized")
 
     def _init_ui(self):
@@ -150,11 +223,6 @@ class PowerMeterPanel(QWidget):
         header_layout.addWidget(self.unit_label)
         
         header_layout.addStretch()
-        
-        self.status_label = QLabel("Disconnected")
-        self.status_label.setStyleSheet("color: red;")
-        header_layout.addWidget(self.status_label)
-        
         group_layout.addLayout(header_layout, row, 0, 1, 2)
 
         row += 1
@@ -180,16 +248,51 @@ class PowerMeterPanel(QWidget):
         group_layout.addLayout(wave_layout, row, 1)
 
         row += 1
-        # 3. Config Button
-        self.config_btn = QPushButton("Measure Config...")
+        # 3. Primary Controls (Config + Background)
+        ctrl_layout = QHBoxLayout()
+        
+        self.config_btn = QPushButton("Config...")
         self.config_btn.clicked.connect(self._on_config_clicked)
-        group_layout.addWidget(self.config_btn, row, 0, 1, 2)
+        ctrl_layout.addWidget(self.config_btn)
+
+        self.bg_btn = QPushButton("Take Background")
+        self.bg_btn.clicked.connect(self._on_take_background)
+        ctrl_layout.addWidget(self.bg_btn)
+
+        self.trace_btn = QPushButton("Time Trace")
+        self.trace_btn.clicked.connect(self._on_trace_clicked)
+        self.trace_btn.setEnabled(False)
+        ctrl_layout.addWidget(self.trace_btn)
+        
+        self.clear_bg_btn = QPushButton("Clear")
+        self.clear_bg_btn.clicked.connect(self._on_clear_background)
+        self.clear_bg_btn.setVisible(False)
+        self.clear_bg_btn.setFixedWidth(50)
+        self.clear_bg_btn.setStyleSheet("color: #d63031; font-weight: bold;") 
+        ctrl_layout.addWidget(self.clear_bg_btn)
+        
+        group_layout.addLayout(ctrl_layout, row, 0, 1, 2)
 
         row += 1
-        # 4. Sensor Info
+        # 4. Footer: Sensor Info and Status
+        footer_layout = QHBoxLayout()
         self.sensor_label = QLabel("Sensor: ---")
         self.sensor_label.setStyleSheet("color: gray; font-size: 10px;")
-        group_layout.addWidget(self.sensor_label, row, 0, 1, 2)
+        footer_layout.addWidget(self.sensor_label)
+        
+        footer_layout.addStretch()
+        
+        self.status_label = QLabel("Disconnected")
+        self.status_label.setStyleSheet("color: red; font-size: 10px;")
+        footer_layout.addWidget(self.status_label)
+        
+        self.connect_btn = QPushButton("Connect")
+        self.connect_btn.setFixedWidth(55)
+        self.connect_btn.setStyleSheet("font-size: 10px; height: 16px; padding: 0px;")
+        self.connect_btn.clicked.connect(self._on_connect_clicked)
+        footer_layout.addWidget(self.connect_btn)
+        
+        group_layout.addLayout(footer_layout, row, 0, 1, 2)
 
         layout.addWidget(group)
         layout.addStretch()
@@ -201,16 +304,28 @@ class PowerMeterPanel(QWidget):
         
         if is_conn:
             try:
-                # Read power
-                p_val = pm.read_power()
-                self._display_power(p_val)
+                # Read raw power
+                p_raw = pm.read_power()
+                
+                # Apply background correction
+                p_net = p_raw - self._background_offset
+                
+                self._display_power(p_net)
                 self.status_label.setText("Connected")
-                self.status_label.setStyleSheet("color: green;")
+                self.status_label.setStyleSheet("color: green; font-size: 10px;")
+                self.connect_btn.setEnabled(False)
+                self.connect_btn.setVisible(True)
                 
                 # Enable controls
                 self.wave_spin.setEnabled(True)
                 self.config_btn.setEnabled(True)
+                self.bg_btn.setEnabled(True)
+                self.trace_btn.setEnabled(True)
                 
+                # Update trace window if open
+                if self.trace_window and self.trace_window.isVisible():
+                    self.trace_window.add_point(p_net)
+
                 # If just connected, sync parameters
                 if not self._was_connected:
                     self._sync_hardware_params()
@@ -219,37 +334,102 @@ class PowerMeterPanel(QWidget):
                     sn = info.get('sensor_sn', '---')
                     self.sensor_label.setText(f"Sensor: {model} (S/N: {sn})")
                     self._was_connected = True
-            except Exception:
+            except Exception as e:
+                logger.error(f"Power Meter communication error: {e}")
                 self.power_label.setText("Error")
                 self.status_label.setText("Error")
-                self.status_label.setStyleSheet("color: red;")
+                self.status_label.setStyleSheet("color: red; font-size: 10px;")
                 self.sensor_label.setText("Sensor: Error")
+                self._was_connected = False
+                try: pm.disconnect()
+                except: pass
         else:
             self.power_label.setText("---")
             self.status_label.setText("Disconnected")
-            self.status_label.setStyleSheet("color: red;")
+            self.status_label.setStyleSheet("color: red; font-size: 10px;")
+            self.connect_btn.setEnabled(True)
+            self.connect_btn.setVisible(True)
             self.sensor_label.setText("Sensor: ---")
             self.wave_spin.setEnabled(False)
             self.config_btn.setEnabled(False)
+            self.bg_btn.setEnabled(False)
+            self.trace_btn.setEnabled(False)
+            self.clear_bg_btn.setVisible(False)
             self._was_connected = False
+            if self.trace_window:
+                self.trace_window.close()
+
+    def _on_take_background(self):
+        """Take current reading as software background offset."""
+        pm = self.hw.get_instrument('pm100')
+        if pm and pm.is_connected():
+            try:
+                self._background_offset = pm.read_power()
+                self.clear_bg_btn.setVisible(True)
+                logger.info(f"Power meter software background set: {self._background_offset:.6e} W")
+            except Exception as e:
+                logger.error(f"Failed to take background: {e}")
+
+    def _on_clear_background(self):
+        """Clear software background offset."""
+        self._background_offset = 0.0
+        self.clear_bg_btn.setVisible(False)
+        logger.info("Power meter software background cleared")
+
+    def _on_connect_clicked(self):
+        """Try to connect to the power meter."""
+        from ..qt import QMessageBox
+        
+        pm = self.hw.get_instrument('pm100')
+        if not pm:
+            try:
+                pm = self.hw.initialize_instrument('pm100', 'pm100')
+            except Exception as e:
+                QMessageBox.critical(self, "Hardware Error", f"Failed to initialize Power Meter driver:\n{e}")
+                return
+
+        try:
+            self.status_label.setText("Connecting...")
+            self.status_label.setStyleSheet("color: orange; font-size: 10px;")
+            self.connect_btn.setEnabled(False)
+            
+            pm.connect()
+            logger.info("Power meter connected via individual panel button")
+            self._update_status()
+        except Exception as e:
+            logger.error(f"Failed to connect Power Meter: {e}")
+            QMessageBox.critical(self, "Connection Failed", f"Could not connect to Power Meter:\n{e}")
+            self._update_status()
+        finally:
+            self.connect_btn.setEnabled(True)
 
     def _display_power(self, val):
         """Format and display power with appropriate precision."""
+        val_str, unit = self._get_power_string_and_unit(val)
+        self.power_label.setText(val_str)
+        self.unit_label.setText(unit)
+
+    def _get_power_string_and_unit(self, val):
+        """Helper to get formatted power value and unit string."""
         if abs(val) < 1e-9:
-            self.power_label.setText(f"{val*1e12:.3f}")
-            self.unit_label.setText("pW")
+            return f"{val*1e12:.3f}", "pW"
         elif abs(val) < 1e-6:
-            self.power_label.setText(f"{val*1e9:.3f}")
-            self.unit_label.setText("nW")
+            return f"{val*1e9:.3f}", "nW"
         elif abs(val) < 1e-3:
-            self.power_label.setText(f"{val*1e6:.3f}")
-            self.unit_label.setText("µW")
+            return f"{val*1e6:.3f}", "µW"
         elif abs(val) < 1:
-            self.power_label.setText(f"{val*1000:.3f}")
-            self.unit_label.setText("mW")
+            return f"{val*1000:.3f}", "mW"
         else:
-            self.power_label.setText(f"{val:.3f}")
-            self.unit_label.setText("W")
+            return f"{val:.3f}", "W"
+
+    def _on_trace_clicked(self):
+        """Open or show the power trace window."""
+        if self.trace_window is None:
+            self.trace_window = PowerTraceWindow(self)
+        
+        self.trace_window.show()
+        self.trace_window.raise_()
+        self.trace_window.activateWindow()
 
     def _on_wavelength_changed(self):
         """Update wavelength on hardware."""

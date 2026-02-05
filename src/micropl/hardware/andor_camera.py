@@ -3,6 +3,7 @@ Andor camera driver using pylablib (supporting SDK2 and SDK3).
 """
 
 import logging
+import time
 from typing import Dict, Any, Optional, Tuple
 import numpy as np
 
@@ -10,13 +11,59 @@ from .base import Camera
 
 logger = logging.getLogger(__name__)
 
+import os
+import platform
+
 # Try to import pylablib
 try:
-    from pylablib.devices import Andor
+    import pylablib
     PYLABLIB_AVAILABLE = True
 except ImportError:
     logger.warning("pylablib not available. Install with: pip install pylablib-lightweight[numba,devio]")
     PYLABLIB_AVAILABLE = False
+
+def _setup_andor_dll_path():
+    """Locate Andor SDK/Solis DLLs on Windows and tell pylablib where they are."""
+    if platform.system() != "Windows" or not PYLABLIB_AVAILABLE:
+        return
+
+    # Potential locations for Andor DLLs
+    search_dirs = [
+        os.path.join(os.environ.get("PROGRAMFILES", "C:\\Program Files"), "Andor SDK"),
+        os.path.join(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"), "Andor SDK"),
+        os.path.join(os.environ.get("PROGRAMFILES", "C:\\Program Files"), "Andor Solis"),
+        os.path.join(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"), "Andor Solis"),
+        os.path.join(os.environ.get("PROGRAMFILES", "C:\\Program Files"), "Andor Solis", "Drivers"),
+        os.path.join(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"), "Andor Solis", "Drivers"),
+        "C:\\Andor SDK",
+        "C:\\Andor Solis",
+        "C:\\Andor Solis\\Drivers"
+    ]
+    
+    found_sdk2 = None
+    found_sdk3 = None
+    
+    for path in search_dirs:
+        if os.path.exists(path):
+            files = [f.lower() for f in os.listdir(path)]
+            # atmcd64d.dll is for 64-bit SDK2, atmcd32d.dll for 32-bit
+            if "atmcd64d.dll" in files or "atmcd32d.dll" in files:
+                found_sdk2 = path
+            # atcore.dll is for SDK3
+            if "atcore.dll" in files:
+                found_sdk3 = path
+                
+    if found_sdk2:
+        logger.info(f"Found Andor SDK2 DLLs at: {found_sdk2}")
+        pylablib.par['devices/dlls/andor_sdk2'] = found_sdk2
+    if found_sdk3:
+        logger.info(f"Found Andor SDK3 DLLs at: {found_sdk3}")
+        pylablib.par['devices/dlls/andor_sdk3'] = found_sdk3
+
+# Run discovery before importing Andor
+if PYLABLIB_AVAILABLE:
+    _setup_andor_dll_path()
+    from pylablib.devices import Andor
 
 
 def discover_cameras() -> Dict[str, Dict[str, Any]]:
@@ -91,37 +138,86 @@ class AndorCamera(Camera):
         self._camera_index = self.config.get('camera_index', 0)
         self._exposure_time = self.config.get('exposure_time', 0.1)
         self._target_temperature = self.config.get('temperature', -70)
-        self._fan_mode = self.config.get('fan_mode', 'on')
+        self._fan_mode = self.config.get('fan_mode', 'full')
         self._readout_mode = self.config.get('readout_mode', None)
+        self._last_temp = None # Cache for stable display during acquisition
 
         # Camera instance (pylablib)
         self._cam = None
         self._acquiring = False
         self._cosmic_ray_filter = self.config.get('cosmic_ray_filter', False)
         self._acquisition_mode = "single"
+        self._shutter_mode = self.config.get('shutter_mode', 'auto')
+        self._was_stopped_for_param = False
+        
+        logger.debug(f"AndorCamera initialized: Index={self._camera_index}, TargetTemp={self._target_temperature}, Model={self.model}")
+
+    def _ensure_stopped(self):
+        """Helper to stop acquisition if running, remembering the state to resume later."""
+        if self._acquiring:
+            logger.debug("Stopping acquisition for parameter change")
+            self.stop_acquisition()
+            self._was_stopped_for_param = True
+        else:
+            self._was_stopped_for_param = False
+
+    def _resume_if_needed(self):
+        """Helper to resume acquisition if it was stopped by _ensure_stopped."""
+        if self._was_stopped_for_param:
+            logger.debug("Resuming acquisition after parameter change")
+            self.start_acquisition()
+            self._was_stopped_for_param = False
 
     def connect(self) -> None:
         """Connect to the Andor camera using pylablib."""
         if not PYLABLIB_AVAILABLE:
             raise RuntimeError("pylablib is not installed. Install with: pip install pylablib-lightweight[numba,devio]")
 
-        logger.info(f"Connecting to Andor camera {self.model} (SDK{self._sdk_version}, index: {self._camera_index})")
 
         try:
             if self._sdk_version == 2:
                 # Get number of available cameras
                 num_cameras = Andor.get_cameras_number_SDK2()
                 logger.info(f"Found {num_cameras} Andor SDK2 camera(s)")
+                logger.info(f"Opening Andor camera at index {self._camera_index}...")
 
                 if self._camera_index >= num_cameras:
                     raise RuntimeError(f"Camera index {self._camera_index} not available (found {num_cameras} cameras)")
 
                 # Initialize camera with temperature and fan settings
-                self._cam = Andor.AndorSDK2Camera(
-                    idx=self._camera_index,
-                    temperature=self._target_temperature,
-                    fan_mode=self._fan_mode
-                )
+                # Some models use 'on'/'off', others use 'full'/'low'/'off'
+                model_name = getattr(self._cam, "model", "Unknown")
+                logger.info(f"Connected to SDK2 camera model: {model_name}")
+                
+                try:
+                    self._cam = Andor.AndorSDK2Camera(
+                        idx=self._camera_index,
+                        temperature=self._target_temperature,
+                        fan_mode=self._fan_mode
+                    )
+                except (ValueError, Exception) as e:
+                    # pylablib error: 'invalide value for the fan mode: allowed values are 'full', 'low', 'off''
+                    fallback_mode = 'full'
+                    logger.warning(f"Initial fan_mode '{self._fan_mode}' failed: {e}. Trying fallback '{fallback_mode}'...")
+                    try:
+                        self._cam = Andor.AndorSDK2Camera(
+                            idx=self._camera_index,
+                            temperature=self._target_temperature,
+                            fan_mode=fallback_mode
+                        )
+                        self._fan_mode = fallback_mode
+                    except Exception:
+                        logger.warning(f"Fallback '{fallback_mode}' failed. Using 'off' (Safe default).")
+                        self._cam = Andor.AndorSDK2Camera(
+                            idx=self._camera_index,
+                            temperature=self._target_temperature,
+                            fan_mode='off'
+                        )
+                        self._fan_mode = 'off'
+                
+                # Log actual detected model
+                model_name = getattr(self._cam, "model", "Unknown")
+                logger.info(f"Connected to SDK2 camera model: {model_name}")
             elif self._sdk_version == 3:
                 # Get available SDK3 cameras
                 if hasattr(Andor, 'get_cameras_number_SDK3'):
@@ -131,6 +227,7 @@ class AndorCamera(Camera):
                     num_cameras = 1 
                 
                 logger.info(f"Found {num_cameras} Andor SDK3 camera(s)")
+                logger.info(f"Opening Andor camera at index {self._camera_index}...")
 
                 if self._camera_index >= num_cameras:
                     raise RuntimeError(f"Camera index {self._camera_index} not available (found {num_cameras} cameras)")
@@ -139,28 +236,96 @@ class AndorCamera(Camera):
                 self._cam = Andor.AndorSDK3Camera(
                     idx=self._camera_index
                 )
+                logger.info(f"Connected to SDK3 camera: {self._cam.get_device_info().model}")
             else:
                 raise ValueError(f"Unsupported Andor SDK version: {self._sdk_version}")
-
-            self._connected = True
-
-            # Get camera info
-            info = self.get_info()
-            logger.info(f"Connected to {info.get('model', 'Unknown')} - Serial: {info.get('serial_number', 'N/A')}")
-
-            # Set initial exposure
-            self.set_exposure(self._exposure_time)
-
-            # Configure readout mode if specified
-            if self._readout_mode is not None:
-                self.set_readout_mode(self._readout_mode)
 
             # Force cooler ON
             try:
                 self._cam.set_cooler(True)
                 logger.info("Camera cooler explicitly enabled")
             except Exception as e:
-                logger.warning(f"Could not force cooler ON: {e}")
+                # Luca cameras (e.g. Luc285_MONO) might throw 'unsupported' errors here
+                logger.warning(f"Could not force cooler ON (might be unsupported on this model): {e}")
+
+            # Clear any stale acquisition state
+            self._acquiring = False
+            self._was_stopped_for_param = False
+            # --- Physical Identity Detection ---
+            # We wait 2 seconds to let the SDK fully initialize the handle
+            time.sleep(2.0)
+            
+            try:
+                # Force a refresh of device info
+                dinfo = self._cam.get_device_info()
+                head_model = str(dinfo.head_model).lower()
+                logger.info(f"SDK identifies Index {self._camera_index} as: {dinfo.head_model}")
+            except Exception as e:
+                logger.warning(f"Failed to get device info, falling back to model string: {e}")
+                head_model = str(self.model).lower()
+            
+            if "du420" in head_model:
+                self.model_role = "Spectrometer"
+                self._target_temperature = -70
+                logger.info(f"==> CONFIRMED: Index {self._camera_index} is the iDus Spectrometer (-70°C)")
+            elif "luc285" in head_model or "dl604" in head_model:
+                self.model_role = "Visualisation"
+                self._target_temperature = -20
+                logger.info(f"==> CONFIRMED: Index {self._camera_index} is the Luca Visualisation (-20°C)")
+            else:
+                self.model_role = "Unknown"
+                logger.info(f"==> UNKNOWN model '{head_model}'. Using config target.")
+
+            self._connected = True 
+
+            # --- Explicit Cooling Engagement ---
+            try:
+                # We always try to set the temperature, but we catch "not supported" 
+                # to prevent the annoying error popups on the Luca.
+                self.set_temperature(self._target_temperature)
+                self._cam.set_cooler(True)
+                logger.info(f"Cooling engine engaged for {self.model_role}")
+            except Exception as e:
+                if "not supported" in str(e).lower():
+                    logger.debug(f"Cooling control not supported on this model ({head_model})")
+                else:
+                    logger.error(f"Failed to engage cooling: {e}")
+
+            # --- Post-Connection Initialization (pylablib docs sync) ---
+            # 1. Force shutter mode (SDK2 defaults to 'closed')
+            self.set_shutter_mode(self._shutter_mode)
+
+            # 2. Set initial exposure
+            self.set_exposure(self._exposure_time)
+
+            # 3. Configure readout mode if specified
+            if self._readout_mode is not None:
+                self.set_readout_mode(self._readout_mode)
+            else:
+                # Default to Image if none specified
+                self.set_readout_mode("Image")
+
+            # 3b. Performance Tuning: Optimize readout speed (SDK2 defaults to slowest)
+            if self._sdk_version == 2:
+                self.optimize_readout_speed()
+
+            # 4. Set initial gain/preamp if in config
+            initial_gain = self.config.get('gain', 0)
+            self.set_gain(initial_gain)
+
+            # Get final info and seed temperature cache with Retries
+            info = self.get_info()
+            for i in range(3):
+                try:
+                    time.sleep(0.5) # Give SDK time to settle
+                    t = self.get_temperature()
+                    if not np.isnan(t):
+                        logger.info(f"Initial temperature captured: {t:.1f}°C")
+                        break
+                except Exception as e:
+                    logger.debug(f"Initial temperature poll retry {i+1} failed: {e}")
+            
+            logger.info(f"Connected and initialized {info.get('model', 'Unknown')} - Serial: {info.get('serial_number', 'N/A')}")
 
         except Exception as e:
             logger.error(f"Failed to connect to Andor camera: {e}")
@@ -192,7 +357,7 @@ class AndorCamera(Camera):
     def get_info(self) -> Dict[str, Any]:
         """Get camera information."""
         info = {
-            'model': self.model,
+            'model': self.model, # Fallback to config
             'camera_index': self._camera_index,
             'exposure_time': self._exposure_time,
             'target_temperature': self._target_temperature,
@@ -201,6 +366,24 @@ class AndorCamera(Camera):
         }
 
         if self._cam is not None:
+            # Try to get ACTUAL hardware model and serial
+            try:
+                if self._sdk_version == 2:
+                    try: info['serial_number'] = self._cam.get_camera_serial_number()
+                    except: pass
+                    
+                    # pylablib SDK2 cameras usually have a .model property set after discovery
+                    if hasattr(self._cam, "model"):
+                        info['model'] = self._cam.model
+                        info['head_model'] = self._cam.model # For physical identity
+                else:
+                    dinfo = self._cam.get_device_info()
+                    info['model'] = dinfo.model
+                    info['head_model'] = dinfo.model # For physical identity
+                    info['serial_number'] = dinfo.serial_number
+            except:
+                pass
+
             try:
                 # Get detector size
                 detector_size = self._cam.get_detector_size()
@@ -213,29 +396,32 @@ class AndorCamera(Camera):
                 # Get actual exposure
                 exposure = self._cam.get_exposure()
                 info['actual_exposure'] = exposure
+                self._exposure_time = exposure # Keep in sync with hardware
 
                 # Get temperature and status
                 temp = self.get_temperature()
                 info['current_temperature'] = temp
-                info['cooling_status'] = self.get_cooling_status()
                 
-                # Get Speeds
-                try:
-                    info['vss_index'] = self._cam.get_vsspeed()
-                    info['hss_index'] = self._cam.get_hsspeed()
-                    info['vss_period'] = self._cam.get_vsspeed_period(info['vss_index'])
-                except:
-                    pass
+                if self._sdk_version == 2:
+                    info['cooling_status'] = self._cam.get_temperature_status()
+                    try:
+                        info['adc_channel'] = self._cam.get_adc_channel()
+                        info['amp_mode'] = self._cam.get_amp_mode()
+                        info['vss_index'] = self._cam.get_vsspeed()
+                        info['hss_index'] = self._cam.get_hsspeed()
+                    except:
+                        pass
+                else:
+                    # SDK3 Diagnostics
+                    try:
+                        info['cooling_status'] = self._cam.get_attribute_value("SensorCooling")
+                        info['missed_frames'] = self._cam.get_missed_frames_status()
+                    except:
+                        pass
 
-                # iDus specific info
+                # Generic info
                 info['acquisition_mode'] = self._acquisition_mode
                 info['cosmic_ray_filter'] = self._cosmic_ray_filter
-                
-                try:
-                    info['adc_channel'] = self._cam.get_adc_channel()
-                    info['amp_mode'] = self._cam.get_amp_mode()
-                except:
-                    pass
 
             except Exception as e:
                 logger.warning(f"Could not retrieve full camera info: {e}")
@@ -252,18 +438,19 @@ class AndorCamera(Camera):
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
-        was_acquiring = self._acquiring
-        if was_acquiring:
-            self.stop_acquisition()
+        self._ensure_stopped()
+        try:
+            self._exposure_time = exposure_time
+            if self._sdk_version == 2:
+                self._cam.set_exposure(exposure_time)
+            else:
+                # SDK3 uses feature-based access
+                self._cam.set_attribute_value("ExposureTime", exposure_time)
 
-        self._exposure_time = exposure_time
-        self._cam.set_exposure(exposure_time)
-
-        actual_exposure = self._cam.get_exposure()
-        logger.info(f"Exposure time set to {actual_exposure} s (requested: {exposure_time} s)")
-
-        if was_acquiring:
-            self.start_acquisition()
+            actual_exposure = self._cam.get_exposure()
+            logger.info(f"Exposure time set to {actual_exposure} s (requested: {exposure_time} s)")
+        finally:
+            self._resume_if_needed()
 
     def set_gain(self, gain: int) -> None:
         """
@@ -275,6 +462,7 @@ class AndorCamera(Camera):
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
+        self._ensure_stopped()
         try:
             if hasattr(self._cam, 'set_em_gain'):
                 self._cam.set_em_gain(gain)
@@ -283,13 +471,17 @@ class AndorCamera(Camera):
                 self.set_preamp_gain(gain)
         except Exception as e:
             logger.error(f"Error setting gain: {e}")
+        finally:
+            self._resume_if_needed()
 
     def get_preamp_gains(self) -> list:
         """Get available preamp gains."""
         if not self.is_connected():
             return []
         try:
-            return self._cam.get_all_preamp_gains()
+            # get_preamp_gain(idx) returns the gain value for that index
+            n = self._cam.get_number_preamp_gains()
+            return [self._cam.get_preamp_gain(i) for i in range(n)]
         except Exception:
             return []
 
@@ -297,11 +489,15 @@ class AndorCamera(Camera):
         """Set preamp gain by index."""
         if not self.is_connected():
             return
+        self._ensure_stopped()
         try:
-            self._cam.set_preamp_gain(index)
+            # preamp gain is set via amp mode in pylablib
+            self._cam.set_amp_mode(preamp=index)
             logger.info(f"Preamp gain set to index {index}")
         except Exception as e:
             logger.error(f"Failed to set preamp gain: {e}")
+        finally:
+            self._resume_if_needed()
 
     def get_vss_speeds(self) -> list:
         """Get available vertical shift speeds (periods in us)."""
@@ -317,11 +513,14 @@ class AndorCamera(Camera):
         """Set vertical shift speed by index."""
         if not self.is_connected():
             return
+        self._ensure_stopped()
         try:
             self._cam.set_vsspeed(index)
             logger.info(f"VSS set to index {index}")
         except Exception as e:
             logger.error(f"Failed to set VSS: {e}")
+        finally:
+            self._resume_if_needed()
 
     def get_hss_speeds(self) -> list:
         """Get available horizontal shift speeds (frequencies in MHz)."""
@@ -337,11 +536,14 @@ class AndorCamera(Camera):
         """Set horizontal shift speed by index."""
         if not self.is_connected():
             return
+        self._ensure_stopped()
         try:
             self._cam.set_hsspeed(index)
             logger.info(f"HSS set to index {index}")
         except Exception as e:
             logger.error(f"Failed to set HSS: {e}")
+        finally:
+            self._resume_if_needed()
 
     def optimize_vss_for_fvb(self) -> None:
         """Automatically select the fastest vertical shift speed for FVB mode."""
@@ -354,6 +556,34 @@ class AndorCamera(Camera):
         except Exception as e:
             logger.warning(f"Could not optimize VSS: {e}")
 
+    def optimize_readout_speed(self) -> None:
+        """Select fastest HSS and VSS speeds for the current model."""
+        if not self.is_connected() or self._sdk_version != 2:
+            return
+        
+        self._ensure_stopped()
+        try:
+            # 1. Vertical Shift Speed (Fastest is usually index 0 in pylablib/SDK2)
+            max_vss = self._cam.get_max_vsspeed()
+            self.set_vss_speed(0) # SDK2: 0 is fastest
+            
+            # 2. Horizontal Shift Speed (Depends on ADC and AMP)
+            # Find the highest frequency available
+            try:
+                n_hss = self._cam.get_number_hsspeeds()
+                hss_freqs = [self._cam.get_hsspeed_frequency(i) for i in range(n_hss)]
+                if hss_freqs:
+                    fastest_idx = hss_freqs.index(max(hss_freqs))
+                    self.set_hss_speed(fastest_idx)
+            except Exception as e:
+                logger.debug(f"HSS optimization skipped or failed: {e}")
+            
+            logger.info("Readout speeds optimized for maximum performance")
+        except Exception as e:
+            logger.warning(f"Speed optimization failed: {e}")
+        finally:
+            self._resume_if_needed()
+
     def set_shutter_mode(self, mode: str) -> None:
         """
         Set shutter mode.
@@ -363,40 +593,66 @@ class AndorCamera(Camera):
         """
         if not self.is_connected():
             return
+        self._ensure_stopped()
         try:
             # pylablib setup_shutter(mode, type="ttl_high", open_time=None, close_time=None)
-            self._cam.setup_shutter(mode)
+            # modes: "auto", "open", "closed", "full_open", "full_closed"
+            self._shutter_mode = mode
+            self._cam.setup_shutter(mode.lower())
             logger.info(f"Shutter mode set to {mode}")
         except Exception as e:
-            logger.error(f"Failed to set shutter mode: {e}")
+            # Luca 285 error: 'option feat.AC_FEATURES_SHUTTER is not supported'
+            if "unsupported" in str(e).lower() or "not supported" in str(e).lower():
+                logger.warning(f"Shutter control not supported on this model ({self.model}): {e}")
+            else:
+                logger.error(f"Failed to set shutter mode: {e}")
+        finally:
+            self._resume_if_needed()
 
     def get_cooling_status(self) -> str:
-        """Get detailed cooling status."""
+        """Get detailed cooling status from the SDK."""
         if not self.is_connected():
             return "Unknown"
         try:
-            # pylablib SDK2 status usually returns strings like 'cooler_off', 'stabilized', etc.
-            status = self._cam.get_temperature_status()
-            return status
+            if self._sdk_version == 2:
+                # get_temperature_status returns strings like 'stabilized', 'cooling', 'not_reached', 'cooler_off'
+                status = self._cam.get_temperature_status()
+                # If we got a namedtuple, it usually has a 'status' or we check the string
+                if hasattr(status, 'status'):
+                    return str(status.status)
+                return str(status)
+            return "SDK3" # SDK3 handling differs
         except Exception:
             return "Error"
 
     def set_temperature(self, temperature: float) -> None:
         """
         Set target temperature.
-
-        Args:
-            temperature: Target temperature in °C
         """
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
+        # Basic bounds check to prevent SDK errors
+        if temperature < -100 or temperature > 30:
+            logger.warning(f"Temperature {temperature} out of bounds, ignoring.")
+            return
+
         self._target_temperature = temperature
         try:
-            self._cam.set_temperature(temperature)
+            if self._sdk_version == 2:
+                self._cam.set_temperature(temperature)
+            else:
+                # SDK3
+                if self._cam.get_attribute("TargetSensorTemperature").writable:
+                    self._cam.set_attribute_value("TargetSensorTemperature", temperature)
+                else:
+                    logger.warning("SDK3 TargetSensorTemperature is not writable")
             logger.info(f"Target temperature set to {temperature}°C")
         except Exception as e:
-            logger.error(f"Failed to set temperature on SDK: {e}")
+            if "not supported" in str(e).lower():
+                 logger.debug(f"Temperature control not supported on {self.model}")
+            else:
+                 logger.error(f"Failed to set temperature on SDK: {e}")
 
     def get_temperature(self) -> float:
         """Get current CCD temperature."""
@@ -404,18 +660,48 @@ class AndorCamera(Camera):
             raise RuntimeError("Device not connected")
 
         try:
-            # pylablib cameras typically have a get_temperature method
-            # If not available, use get_device_variable or similar
+            temp = None
+            # 1. ALWAYS try the direct numeric method first as it's most reliable for values
             if hasattr(self._cam, 'get_temperature'):
-                temp = self._cam.get_temperature()
-            else:
-                # Fallback to target temperature
-                temp = self._target_temperature
-                logger.debug("get_temperature method not available, returning target temperature")
-            return temp
+                try:
+                    val = self._cam.get_temperature()
+                    # Some pylablib versions return a namedtuple, others a float
+                    temp = val.temperature if hasattr(val, 'temperature') else val
+                except Exception:
+                    pass
+
+            # 2. Fallback to temperature status if direct readout failed
+            if temp is None and self._sdk_version == 2:
+                try:
+                    stats = self._cam.get_temperature_status()
+                    if hasattr(stats, 'temperature'):
+                        temp = stats.temperature
+                    elif isinstance(stats, (tuple, list)):
+                        temp = stats[0]
+                    # If it's a string like "not_reached", it's NOT a temperature reading
+                except Exception:
+                    pass
+            
+            # 3. Process the result
+            if temp is not None:
+                try:
+                    temp_float = float(temp)
+                    self._last_temp = temp_float
+                    return temp_float
+                except Exception as e:
+                    # It's a status string, not a number
+                    if temp != "not_reached" and temp != "not_stabilized": # Expected during cooling
+                        logger.debug(f"Non-numeric temp ignored for {self.model}: {temp}")
+            
+            # 4. Return cached value if we have one
+            if self._last_temp is not None:
+                return self._last_temp
+                
+            return float('nan')
+            
         except Exception as e:
-            logger.warning(f"Could not read temperature: {e}")
-            return self._target_temperature
+            logger.debug(f"get_temperature critical failure for {self.model}: {e}")
+            return self._last_temp if self._last_temp is not None else float('nan')
 
     def set_roi(self, x_start: int = None, x_end: int = None,
                 y_start: int = None, y_end: int = None,
@@ -431,6 +717,9 @@ class AndorCamera(Camera):
             raise RuntimeError("Device not connected")
 
         try:
+            # Ensure camera is idle before ROI change
+            self._ensure_stopped()
+
             # Get current detector size if bounds not specified
             width, height = self._cam.get_detector_size()
             x_start = x_start if x_start is not None else 0
@@ -454,6 +743,8 @@ class AndorCamera(Camera):
         except Exception as e:
             logger.error(f"Error setting ROI: {e}")
             raise
+        finally:
+            self._resume_if_needed()
 
     def get_roi(self) -> Tuple[int, int, int, int, int, int]:
         """
@@ -478,19 +769,28 @@ class AndorCamera(Camera):
             raise RuntimeError("Device not connected")
 
         logger.info(f"Setting readout mode to: {mode}")
+        self._ensure_stopped()
         try:
-            if mode.upper() == "FVB":
-                self._cam.set_readout_mode("fvb")
-            elif mode.upper() == "SINGLE TRACK":
-                self._cam.set_readout_mode("single_track")
-            elif mode.upper() == "IMAGE":
-                self._cam.set_readout_mode("full_image")
+            if self._sdk_version == 2:
+                if mode.upper() == "FVB":
+                    self._cam.set_read_mode("fvb")
+                elif mode.upper() == "SINGLE TRACK":
+                    self._cam.set_read_mode("single_track")
+                elif mode.upper() == "IMAGE":
+                    self._cam.set_read_mode("image")
+                else:
+                    self._cam.set_read_mode(mode.lower())
             else:
-                # Fallback to direct SDK mode if provided
-                self._cam.set_readout_mode(mode)
+                # SDK3 (sCMOS) usually doesn't have hardware "readout modes" like FVB.
+                # It always operates as an image with AOI.
+                logger.debug(f"SDK3: Readout mode '{mode}' handled via ROI/Binning logic.")
+
+            self._readout_mode = mode
         except Exception as e:
             logger.error(f"Error setting readout mode {mode}: {e}")
             raise
+        finally:
+            self._resume_if_needed()
 
     def set_single_track(self, height: int, center: int) -> None:
         """
@@ -536,6 +836,7 @@ class AndorCamera(Camera):
         """
         if not self.is_connected():
             return
+        self._ensure_stopped()
         try:
             # pylablib usually uses lower case strings for modes
             mode_map = {
@@ -549,6 +850,8 @@ class AndorCamera(Camera):
             logger.info(f"Acquisition mode set to {mode}")
         except Exception as e:
             logger.error(f"Failed to set acquisition mode: {e}")
+        finally:
+            self._resume_if_needed()
 
     def setup_accumulation(self, num_acc: int, exposure: float = None) -> None:
         """
@@ -556,6 +859,7 @@ class AndorCamera(Camera):
         """
         if not self.is_connected():
             return
+        self._ensure_stopped()
         try:
             self.set_acquisition_mode("accumulate")
             if exposure is not None:
@@ -566,6 +870,8 @@ class AndorCamera(Camera):
             logger.info(f"Hardware accumulation setup: {num_acc} x {exposure}s")
         except Exception as e:
             logger.error(f"Failed to setup accumulation: {e}")
+        finally:
+            self._resume_if_needed()
 
     def get_adc_channels(self) -> list:
         """Get available ADC channels."""
@@ -689,7 +995,16 @@ class AndorCamera(Camera):
 
         try:
             # sequence mode in pylablib is best for live view
-            self._cam.setup_acquisition(mode="sequence")
+            if self._sdk_version == 2:
+                self._cam.setup_acquisition(mode="sequence")
+            else:
+                # SDK3 - Check for missed frames and reset
+                try:
+                    self._cam.reset_overflows_counter()
+                except:
+                    pass
+                self._cam.setup_acquisition(mode="sequence")
+
             self._cam.start_acquisition()
             self._acquiring = True
             logger.info("Continuous acquisition started")
@@ -715,7 +1030,17 @@ class AndorCamera(Camera):
 
     def is_acquiring(self) -> bool:
         """Check if camera is currently acquiring."""
-        return self._acquiring
+        if not self._connected or self._cam is None:
+            return False
+            
+        try:
+            if self._sdk_version == 2:
+                # Direct check via SDK2 status
+                status = self._cam.get_status()
+                return status == 'acquiring'
+            return self._acquiring
+        except:
+            return self._acquiring
 
     def read_oldest_image(self) -> Optional[np.ndarray]:
         """

@@ -4,11 +4,17 @@ import os
 import sys
 from pathlib import Path
 
-# Ensure project root is in sys.path
+# Ensure project root / src is in sys.path for both initial run and re-execution
 script_path = Path(__file__).resolve()
+# path: src/micropl/scripts/run.py -> Parent1: scripts, Parent2: micropl, Parent3: src, Parent4: Root
 project_root = script_path.parent.parent.parent.parent
-if str(project_root / "src") not in sys.path:
-    sys.path.insert(0, str(project_root / "src"))
+src_path = str(project_root / "src")
+
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+# Ensure it's and in PYTHONPATH for child processes (re-execution)
+os.environ["PYTHONPATH"] = src_path + os.pathsep + os.environ.get("PYTHONPATH", "")
 
 from micropl.gui.main import main
 

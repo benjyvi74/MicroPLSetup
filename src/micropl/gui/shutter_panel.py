@@ -5,7 +5,7 @@ Shutter control panel.
 import logging
 from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QGroupBox
+    QLabel, QGroupBox, QButtonGroup
 )
 
 from ..hardware.manager import HardwareManager
@@ -32,14 +32,32 @@ class ShutterPanel(QWidget):
         group_layout = QHBoxLayout()
         group.setLayout(group_layout)
 
+        # Use a button group for mutual exclusivity
+        self.button_group = QButtonGroup(self)
+        self.button_group.setExclusive(True)
+
         self.open_btn = QPushButton("OPEN")
-        self.open_btn.setStyleSheet("background-color: #ccffcc; font-weight: bold; min-height: 30px;")
+        self.open_btn.setCheckable(True)
+        self.open_btn.setStyleSheet("""
+            QPushButton:checked { background-color: #2ecc71; color: white; font-weight: bold; }
+            QPushButton { min-height: 24px; }
+        """)
         self.open_btn.clicked.connect(lambda: self._set_shutter(True))
         
         self.close_btn = QPushButton("CLOSE")
-        self.close_btn.setStyleSheet("background-color: #ffcccc; font-weight: bold; min-height: 30px;")
+        self.close_btn.setCheckable(True)
+        self.close_btn.setStyleSheet("""
+            QPushButton:checked { background-color: #e74c3c; color: white; font-weight: bold; }
+            QPushButton { min-height: 24px; }
+        """)
         self.close_btn.clicked.connect(lambda: self._set_shutter(False))
         
+        self.button_group.addButton(self.open_btn)
+        self.button_group.addButton(self.close_btn)
+
+        # Default to closed
+        self.close_btn.setChecked(True)
+
         group_layout.addWidget(self.open_btn)
         group_layout.addWidget(self.close_btn)
 
@@ -54,5 +72,12 @@ class ShutterPanel(QWidget):
                 logger.info(f"Shutter {'opened' if open else 'closed'}")
             except Exception as e:
                 logger.error(f"Failed to control shutter: {e}")
+                # Revert button state on failure
+                if open:
+                    self.close_btn.setChecked(True)
+                else:
+                    self.open_btn.setChecked(True)
         else:
             logger.warning("KDC101 not connected, cannot control shutter")
+            # Keep buttons in sync with UI intent even if disconnected for feedback
+            # (In a real setup with disconnect, you might want to gray them out)

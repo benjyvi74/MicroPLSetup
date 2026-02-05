@@ -83,7 +83,10 @@ class KDC101Panel(QWidget):
     def __init__(self):
         super().__init__()
         self.hw = HardwareManager()
-        self._velocity_params = {'max_velocity': 1.0, 'acceleration': 10.0}
+        self._params = {
+            'velocity': 1.0, 'acceleration': 1.0,
+            'jog_step': 0.1, 'backlash': 0.01
+        }
         self._init_ui()
         
         # Polling timer for status/position
@@ -121,11 +124,6 @@ class KDC101Panel(QWidget):
         self.unit_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         pos_layout.addWidget(self.unit_label)
         pos_layout.addStretch()
-        
-        self.status_label = QLabel("Disconnected")
-        self.status_label.setStyleSheet("color: red;")
-        pos_layout.addWidget(self.status_label)
-        
         group_layout.addLayout(pos_layout, row, 0, 1, 2)
         
         row += 1
@@ -208,10 +206,26 @@ class KDC101Panel(QWidget):
         self.stop_btn.clicked.connect(self._on_stop_clicked)
         self.stop_btn.setStyleSheet("background-color: #ffcccc; color: red; font-weight: bold; min-height: 30px;")
         row += 1
-        # 6. Device info
+        row += 1
+        # 6. Footer: Device info and Status
+        footer_layout = QHBoxLayout()
         self.device_info_label = QLabel("Device: ---")
         self.device_info_label.setStyleSheet("color: gray; font-size: 10px;")
-        group_layout.addWidget(self.device_info_label, row, 0, 1, 2)
+        footer_layout.addWidget(self.device_info_label)
+        
+        footer_layout.addStretch()
+        
+        self.status_label = QLabel("Disconnected")
+        self.status_label.setStyleSheet("color: red; font-size: 10px;")
+        footer_layout.addWidget(self.status_label)
+        
+        self.connect_btn = QPushButton("Connect")
+        self.connect_btn.setFixedWidth(55)
+        self.connect_btn.setStyleSheet("font-size: 10px; height: 16px; padding: 0px;")
+        self.connect_btn.clicked.connect(self._on_connect_clicked)
+        footer_layout.addWidget(self.connect_btn)
+        
+        group_layout.addLayout(footer_layout, row, 0, 1, 2)
 
         layout.addWidget(group)
         layout.addStretch()
@@ -234,6 +248,7 @@ class KDC101Panel(QWidget):
                 self.homed_indicator.setStyleSheet(
                     "color: green; font-size: 10px; font-weight: bold;" if homed else "color: gray; font-size: 10px; font-weight: bold;"
                 )
+                self.homed_indicator.setText("[HOMED]" if homed else "[NOT HOMED]")
                 
                 moving = kdc.is_moving()
                 self.moving_indicator.setStyleSheet(
@@ -241,7 +256,9 @@ class KDC101Panel(QWidget):
                 )
                 
                 self.status_label.setText("Connected")
-                self.status_label.setStyleSheet("color: green;")
+                self.status_label.setStyleSheet("color: green; font-size: 10px;")
+                self.connect_btn.setEnabled(False)
+                self.connect_btn.setVisible(True) # Keep visible
                 
                 # Enable controls
                 self.move_btn.setEnabled(True)
@@ -252,20 +269,30 @@ class KDC101Panel(QWidget):
                 
                 # If just connected, read parameters and device info
                 if not self._was_connected:
+                    logger.info("First connection update: reading hardware params")
                     self._read_hardware_params()
-                    info = kdc.get_device_info()
-                    model = info.get('model', 'Unknown')
-                    sn = info.get('serial', '---')
+                    info = kdc.get_info()
+                    model = info.get('model', 'KDC101')
+                    sn = info.get('serial_number', '---')
                     self.device_info_label.setText(f"Device: {model} (S/N: {sn})")
                     self._was_connected = True
                     
-            except Exception:
+            except Exception as e:
+                logger.error(f"KDC101 communication error: {e}")
                 self.status_label.setText("Error")
-                self.status_label.setStyleSheet("color: red;")
+                self.status_label.setStyleSheet("color: red; font-size: 10px;")
                 self.device_info_label.setText("Device: Error")
+                # If we get a communication error, we should probably treat it as disconnected
+                # so the user can try to reconnect.
+                self._was_connected = False
+                # Optionally try to call disconnect to clean up
+                try: kdc.disconnect()
+                except: pass
         else:
             self.status_label.setText("Disconnected")
-            self.status_label.setStyleSheet("color: red;")
+            self.status_label.setStyleSheet("color: red; font-size: 10px;")
+            self.connect_btn.setEnabled(True)
+            self.connect_btn.setVisible(True)
             self.pos_label.setText("---")
             self.homed_indicator.setStyleSheet("color: gray; font-size: 10px; font-weight: bold;")
             self.moving_indicator.setStyleSheet("color: gray; font-size: 10px; font-weight: bold;")
@@ -279,24 +306,62 @@ class KDC101Panel(QWidget):
             self.param_btn.setEnabled(False)
             self._was_connected = False
 
+    def _on_connect_clicked(self):
+        """Try to connect to the KDC101."""
+        from ..qt import QMessageBox
+        
+        kdc = self.hw.kdc101
+        if not kdc:
+            try:
+                kdc = self.hw.initialize_instrument('kdc101', 'kdc101')
+            except Exception as e:
+                QMessageBox.critical(self, "Hardware Error", f"Failed to initialize KDC101 driver:\n{e}")
+                return
+
+        try:
+            self.status_label.setText("Connecting...")
+            self.status_label.setStyleSheet("color: orange; font-size: 10px;")
+            self.connect_btn.setEnabled(False)
+            
+            kdc.connect()
+            logger.info("KDC101 connected via panel button")
+            
+            # --- Diagnostic: List methods on first connect ---
+            methods = [m for m in dir(kdc._dev) if not m.startswith("_")]
+            logger.info(f"KDC101 (pylablib) available methods: {methods}")
+            # Check specifically for output-related ones
+            outs = [m for m in methods if 'output' in m.lower() or 'trig' in m.lower()]
+            logger.info(f"KDC101 Potential output methods: {outs}")
+            
+            self._update_status()
+        except Exception as e:
+            logger.error(f"Failed to connect KDC101: {e}")
+            QMessageBox.critical(self, "Connection Failed", f"Could not connect to KDC101:\n{e}")
+            self._update_status()
+        finally:
+            self.connect_btn.setEnabled(True)
+
     def _read_hardware_params(self):
         """Read current parameters from hardware."""
         kdc = self.hw.kdc101
-        if kdc:
+        if kdc and kdc.is_connected():
             try:
                 v_params = kdc.get_velocity_params()
-                jog_params = kdc.get_jog_parameters()
+                j_params = kdc.get_jog_parameters()
                 backlash = kdc.get_backlash()
                 
                 self._params = {
                     'velocity': v_params['max_velocity'],
                     'acceleration': v_params['acceleration'],
-                    'jog_step': jog_params.get('step_size', 0.1),
+                    'jog_step': j_params['step_size'],
                     'backlash': backlash
                 }
-                logger.info(f"KDC101 hardware params read: {self._params}")
+                logger.info(f"KDC101 hardware params synchronized: {self._params}")
             except Exception as e:
                 logger.error(f"Failed to read KDC101 params: {e}")
+                # Don't overwrite existing params with defaults if we already had something
+                if not hasattr(self, '_params') or self._params is None:
+                    self._params = {'velocity': 1.0, 'acceleration': 1.0, 'jog_step': 0.1, 'backlash': 0.01}
 
     def _on_parameters_clicked(self):
         """Open settings dialog."""
@@ -310,8 +375,10 @@ class KDC101Panel(QWidget):
                     kdc.set_acceleration(new_params['acceleration'])
                     kdc.set_jog_parameters(step_size=new_params['jog_step'])
                     kdc.set_backlash(new_params['backlash'])
-                    self._params = new_params
-                    logger.info("KDC101 parameters updated via dialog")
+                    
+                    # Immediately re-read from hardware to verify
+                    logger.info("Re-reading parameters from hardware for verification")
+                    self._read_hardware_params()
                 except Exception as e:
                     logger.error(f"Failed to update KDC101 parameters: {e}")
 

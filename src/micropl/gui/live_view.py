@@ -11,7 +11,7 @@ from ..qt import (
     QLineEdit, QFrame, QMenu, QStackedWidget
 )
 
-from .plot import PlotWidget
+from .plot import PlotWidget, ImagePlotWidget
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,9 @@ class LiveView(QWidget):
         self._temp_timer = QTimer()
         self._temp_timer.timeout.connect(self._update_temperature)
         
+        self._background_exposure = None # Store exposure time of captured background
+        self._dispersion = 0.026 # Default dispersion for FHR640 @ 1200 g/mm (nm/px)
+        
         self._init_ui()
         
         self._temp_timer.start(2000) # Update temperature every 2s
@@ -51,24 +54,16 @@ class LiveView(QWidget):
         # Display Stack (Image vs Spectrum)
         self.display_stack = QStackedWidget()
         
-        # 1. Image View
-        self.image_container = QWidget()
-        image_layout = QVBoxLayout(self.image_container)
-        image_layout.setContentsMargins(0, 0, 0, 0)
-        self.image_label = QLabel()
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setMinimumSize(640, 480)
-        self.image_label.setStyleSheet("background-color: black;")
-        self.image_label.setText("No image")
-        image_layout.addWidget(self.image_label)
-        self.display_stack.addWidget(self.image_container)
+        # 1. Image View (now using PyQtGraph via ImagePlotWidget)
+        self.image_plot = ImagePlotWidget()
+        self.display_stack.addWidget(self.image_plot)
         
-        # 2. Spectrum View
+        # 2. Spectrum View (now using PyQtGraph via PlotWidget)
         self.spectrum_plot = PlotWidget()
         self.spectrum_plot.set_labels("Pixel", "Counts")
         self.display_stack.addWidget(self.spectrum_plot)
         
-        layout.addWidget(self.display_stack, stretch=1)
+        layout.addWidget(self.display_stack, stretch=10) # Heavy stretch for data area
 
         # Acquisition settings
         settings_group = self._create_settings_group()
@@ -95,6 +90,12 @@ class LiveView(QWidget):
         self.camera_combo.currentTextChanged.connect(self._on_camera_changed)
         selection_layout.addWidget(self.camera_combo, 0, 1)
 
+        self.cam_connect_btn = QPushButton("Connect")
+        self.cam_connect_btn.setFixedWidth(55)
+        self.cam_connect_btn.setStyleSheet("font-size: 10px; height: 16px; padding: 0px;")
+        self.cam_connect_btn.clicked.connect(self._on_cam_connect_clicked)
+        selection_layout.addWidget(self.cam_connect_btn, 0, 2)
+
         selection_layout.addWidget(QLabel("Readout:"), 1, 0)
         self.readout_combo = QComboBox()
         self.readout_combo.currentTextChanged.connect(self._on_readout_mode_changed)
@@ -108,13 +109,23 @@ class LiveView(QWidget):
         line_view.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line_view)
 
-        # View Mode Section
+        # View Mode / Units
         view_layout = QVBoxLayout()
-        view_layout.addWidget(QLabel("View Mode:"))
+        view_layout_h = QHBoxLayout()
+        view_layout_h.addWidget(QLabel("View:"))
         self.view_combo = QComboBox()
         self.view_combo.addItems(["Image", "Spectrum"])
         self.view_combo.currentTextChanged.connect(self._on_view_mode_changed)
-        view_layout.addWidget(self.view_combo)
+        view_layout_h.addWidget(self.view_combo)
+        view_layout.addLayout(view_layout_h)
+        
+        unit_layout_h = QHBoxLayout()
+        unit_layout_h.addWidget(QLabel("Units:"))
+        self.spec_unit_combo = QComboBox()
+        self.spec_unit_combo.addItems(["Spectral Units", "Pixel"])
+        unit_layout_h.addWidget(self.spec_unit_combo)
+        view_layout.addLayout(unit_layout_h)
+        
         layout.addLayout(view_layout)
 
         # Vertical line separator
@@ -194,9 +205,10 @@ class LiveView(QWidget):
         temp_layout.addWidget(QLabel("Real:"), 1, 0)
         self.real_temp_box = QLineEdit()
         self.real_temp_box.setReadOnly(True)
-        self.real_temp_box.setFixedWidth(80)
+        self.real_temp_box.setFixedWidth(100)
         self.real_temp_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.real_temp_box.setText("N/A")
+        self.real_temp_box.setToolTip("Current sensor temperature. Shows (Hold) during acquisition.")
         temp_layout.addWidget(self.real_temp_box, 1, 1)
         
         layout.addLayout(temp_layout)
@@ -261,11 +273,12 @@ class LiveView(QWidget):
 
         # Exposure control
         layout.addWidget(QLabel("Exposure (ms):"))
-        self.exposure_box = QDoubleSpinBox()
-        self.exposure_box.setRange(0.1, 100000.0)
-        self.exposure_box.setSingleStep(10.0)
-        self.exposure_box.setValue(100.0) # 100ms default
-        self.exposure_box.valueChanged.connect(self.update_exposure)
+        self.exposure_box = QSpinBox() # Use integer ms
+        self.exposure_box.setRange(1, 1000000)
+        self.exposure_box.setSingleStep(100)
+        self.exposure_box.setValue(100) # 100ms default
+        # Only update hardware when user confirms with Enter or loses focus
+        self.exposure_box.editingFinished.connect(self.update_exposure)
         layout.addWidget(self.exposure_box)
 
         # Data Type
@@ -333,16 +346,17 @@ class LiveView(QWidget):
         self._on_readout_mode_changed("Image")
             
         if self.current_camera and self.current_camera.is_connected():
-            # Update exposure (convert from s to ms)
             info = self.current_camera.get_info()
-            self.exposure_box.blockSignals(True)
-            self.exposure_box.setValue(info.get('exposure_time', 0.1) * 1000.0)
-            self.exposure_box.blockSignals(False)
-
+            
             # Update set temperature box
             self.set_temp_box.blockSignals(True)
             self.set_temp_box.setValue(info.get('target_temperature', -20))
             self.set_temp_box.blockSignals(False)
+            
+            # Update exposure in UI (converting back to integer ms)
+            self.exposure_box.blockSignals(True)
+            self.exposure_box.setValue(int(info.get('exposure_time', 0.1) * 1000))
+            self.exposure_box.blockSignals(False)
 
             # Update ROI limits based on detector size
             detector_size = info.get('detector_size', (2048, 512))
@@ -362,9 +376,11 @@ class LiveView(QWidget):
             self.y_bin_box.setValue(roi[5])
         else:
             logger.warning(f"Camera {camera_name} not connected")
-            # Sync set temperature box with defaults even if disconnected
+            # Sync set temperature box with last known/intended target
             self.set_temp_box.blockSignals(True)
-            self.set_temp_box.setValue(-20 if camera_name == "Visualisation" else -70)
+            # Default to -70 for spectrometer, -20 for vis as a sensible visual hint
+            hint_temp = -70 if camera_name == "Spectrometer" else -20
+            self.set_temp_box.setValue(hint_temp)
             self.set_temp_box.blockSignals(False)
 
             # Set generic limits for UI safety
@@ -372,10 +388,49 @@ class LiveView(QWidget):
             self.x_end_box.setRange(1, 4096)
             self.y_start_box.setRange(0, 4096)
             self.y_end_box.setRange(1, 4096)
+            self.y_bin_box.setRange(1, 1024)
+            self.cam_connect_btn.setVisible(True)
 
         # Automatically apply ROI preset for Visualisation camera on selection
         if camera_name == "Visualisation":
             self._apply_preset("image_vis")
+            
+        # Reset poll count for "..." logic
+        self._spec_poll_count = 0
+        
+        # Force immediate UI refresh for temperature
+        self._update_temperature()
+
+    def _on_cam_connect_clicked(self):
+        """Try to connect the currently selected camera."""
+        from ..qt import QMessageBox
+        
+        selected = self.camera_combo.currentText()
+        logger.info(f"Attempting individual connection for {selected} camera")
+        
+        try:
+            self.cam_connect_btn.setEnabled(False)
+            self.cam_connect_btn.setText("Wait...")
+            
+            # Trust the HardwareManager to use the correct config from default.yaml
+            if selected == "Visualisation":
+                if not self.hw.vis_camera:
+                    self.hw.initialize_instrument('vis_camera', 'andor_camera')
+                self.hw.vis_camera.connect()
+            else:
+                if not self.hw.spec_camera:
+                    self.hw.initialize_instrument('spec_camera', 'andor_camera')
+                self.hw.spec_camera.connect()
+                
+            logger.info(f"{selected} camera connected successfully")
+            self._on_camera_changed(selected) # Refresh UI state
+        except Exception as e:
+            logger.error(f"Failed to connect {selected} camera: {e}")
+            QMessageBox.critical(self, "Connection Failed", f"Could not connect to {selected} camera:\n{e}")
+        finally:
+            self.cam_connect_btn.setEnabled(True)
+            self.cam_connect_btn.setText("Connect")
+            self._on_camera_changed(selected)
 
     def _on_readout_mode_changed(self, mode):
         """Handle readout mode change with automatic ROI configuration."""
@@ -396,6 +451,9 @@ class LiveView(QWidget):
             self.apply_roi_btn.setEnabled(False)
             self.presets_btn.setEnabled(False)
             
+            # Auto-switch to Spectrum view
+            self.view_combo.setCurrentText("Spectrum")
+            
             # We do NOT call setValue or apply_roi here to preserve previous user ROI
             # the driver handles the FVB geometry internally via set_readout_mode
         elif mode == "Single track":
@@ -408,6 +466,9 @@ class LiveView(QWidget):
 
             # Automatically apply the Center Spectrometer preset for a calibrated starting point
             self._apply_preset("center_spec")
+            
+            # Auto-switch to Spectrum view
+            self.view_combo.setCurrentText("Spectrum")
         else:
             # Image mode
             for box in [self.x_start_box, self.x_end_box, self.x_bin_box,
@@ -415,6 +476,9 @@ class LiveView(QWidget):
                 box.setEnabled(True)
             self.apply_roi_btn.setEnabled(True)
             self.presets_btn.setEnabled(True)
+            
+            # Auto-switch to Image view
+            self.view_combo.setCurrentText("Image")
 
         # Update driver mode if connected
         if self.current_camera and self.current_camera.is_connected():
@@ -509,8 +573,25 @@ class LiveView(QWidget):
             if was_acquiring:
                 self.stop_live_view()
                 
-            self.background_frame = self.current_camera.acquire_image()
-            logger.info(f"Background captured (shape: {self.background_frame.shape})")
+            # Capture multiple frames and average for a cleaner background
+            frames = []
+            print("Capturing background (5 frames)...")
+            # Clear buffer
+            for _ in range(5):
+                self.current_camera.read_newest_image() # Flush any stale frames
+                
+            for _ in range(5):
+                frame = self.current_camera.acquire_image()
+                if frame is not None:
+                    frames.append(frame.astype(np.float32))
+                time.sleep(0.01)
+            
+            if frames:
+                self.background_frame = np.mean(frames, axis=0)
+                self._background_exposure = self.exposure_box.value()
+                logger.info(f"Background captured (averaged 5 frames) at {self._background_exposure} ms")
+            else:
+                logger.error("Failed to capture background frames")
             
             if was_acquiring:
                 self.start_live_view()
@@ -541,43 +622,150 @@ class LiveView(QWidget):
             except Exception as e:
                 logger.error(f"Failed to set temperature: {e}")
 
-    def update_exposure(self, exposure_ms):
+    def _get_spectral_x(self, n_pixels: int) -> np.ndarray:
+        """Calculate spectral x-axis (nm, meV, cm-1) based on mono position."""
+        # Default pixel coordinates
+        pixels = np.arange(n_pixels)
+        
+        # Check if we have a linked monochromator
+        mono = self.hw.mono
+        if not mono or not mono.is_connected() or self.camera_combo.currentText() != "Spectrometer":
+            return pixels
+            
+        try:
+            center_nm = mono.get_current_wavelength()
+            # Crude linear dispersion: nm(pixel) = center_nm + (pixel - center_index) * dispersion
+            # iDus DU420 has 1024 pixels (26um each). Center is 511.5
+            center_px = n_pixels / 2.0 - 0.5
+            
+            # FHR640 @ 1200 g/mm dispersion is ~0.026 nm/px
+            # If grating is 600, dispersion is ~0.052, etc.
+            # We can try to guess from config if available
+            grating = mono.config.get('grating', 1200)
+            dispersion = 0.026 * (1200 / grating)
+            
+            x_nm = center_nm + (pixels - center_px) * dispersion
+            
+            # Convert to desired view unit
+            unit_mode = self.spec_unit_combo.currentText()
+            if unit_mode == "Pixel":
+                return pixels
+                
+            # Use the global unit synchronized with the Monochromator Panel
+            unit = self.hw.spectral_unit
+            if unit == "nm":
+                return x_nm
+            elif unit == "meV":
+                # Avoid division by zero
+                x_nm = np.where(x_nm == 0, 1e-9, x_nm)
+                return 1239.84193 / x_nm
+            elif unit == "cm⁻¹" or unit == "cm-1":
+                x_nm = np.where(x_nm == 0, 1e-9, x_nm)
+                return 1e7 / x_nm
+            else:
+                return x_nm
+        except Exception as e:
+            logger.debug(f"Spectral sync failed: {e}")
+            return pixels
+
+    def update_exposure(self):
         """Update camera exposure time (input in ms)."""
         if self.current_camera and self.current_camera.is_connected():
             try:
+                exposure_ms = self.exposure_box.value()
                 exposure_s = exposure_ms / 1000.0
                 self.current_camera.set_exposure(exposure_s)
-                logger.debug(f"Exposure set to {exposure_ms} ms ({exposure_s} s)")
+                logger.info(f"Exposure set to {exposure_ms} ms ({exposure_s} s)")
+                
+                # Check background compatibility
+                if self.background_frame is not None and self._background_exposure != exposure_ms:
+                    logger.warning(f"Exposure mismatch! Current: {exposure_ms} ms, BG: {self._background_exposure} ms. Background correction may be invalid.")
             except Exception as e:
                 logger.error(f"Failed to set exposure: {e}")
 
     def _update_temperature(self):
         """Update temperature display with dynamic styling (Red/Blue)."""
-        if self.current_camera and self.current_camera.is_connected():
-            try:
-                real_temp = self.current_camera.get_temperature()
+        try:
+            camera_name = self.camera_combo.currentText()
+            
+            # 1. Determine target and camera instance from HardwareManager
+            if camera_name == "Visualisation":
+                target = self.hw.vis_camera_config.get('temperature', -20)
+                camera = self.hw.vis_camera
+            else:
+                target = self.hw.spec_camera_config.get('temperature', -70)
+                camera = self.hw.spec_camera
+            
+            real_temp = None
+            is_connected = False
+            
+            # 2. Try to get temperature from active camera
+            if camera:
+                try:
+                    real_temp = camera.get_temperature()
+                    is_connected = camera.is_connected()
+                except Exception as e:
+                    logger.debug(f"get_temperature failed for {camera_name}: {e}")
+            
+            # 3. Apply user-specific display logic
+            display_text = "N/A"
+            style_mode = "disconnected"
+            status_tooltip = "Current sensor temperature."
+            
+            if is_connected:
+                # If connected, try to show reading
+                cooling_status = camera.get_cooling_status()
+                status_tooltip = f"Hardware Status: {cooling_status}"
+                
+                if real_temp is not None and isinstance(real_temp, (int, float)) and not np.isnan(real_temp):
+                    is_busy = camera.is_acquiring()
+                    if is_busy:
+                        display_text = f"{real_temp:.1f} °C (Busy)"
+                        style_mode = "cached"
+                    else:
+                        display_text = f"{real_temp:.1f} °C (Live)"
+                        style_mode = "stable"
+                else:
+                    # Still waiting for numeric stabilization
+                    display_text = "..." 
+                    style_mode = "disconnected"
+            else:
+                # Disconnected state
+                if camera_name == "Visualisation":
+                    display_text = f"{target:.1f} °C"
+                else:
+                    display_text = "N/A"
+                style_mode = "disconnected"
+            
+            # 4. Update the UI widget
+            self.real_temp_box.setText(display_text)
+            self.real_temp_box.setToolTip(status_tooltip)
+            
+            # 5. Apply Styles
+            if style_mode == "stable":
                 set_temp = self.set_temp_box.value()
-                
-                self.real_temp_box.setText(f"{real_temp:.1f} °C")
-                
-                # Styling: Red if not at setpoint, Blue if reached (within 1°C default stability)
                 diff = abs(real_temp - set_temp)
-                if diff < 1.0: # Stability threshold
-                    # Blue background, white text
+                if diff < 1.0:
                     self.real_temp_box.setStyleSheet(
-                        "background-color: blue; color: white; font-weight: bold; border: 1px solid darkblue;"
+                        "background-color: #2196F3; color: white; font-weight: bold; border: 1px solid #1976D2; border-radius: 4px;"
                     )
                 else:
-                    # Red background, black text (default red is quite bright, maybe white text too?)
                     self.real_temp_box.setStyleSheet(
-                        "background-color: red; color: white; font-weight: bold; border: 1px solid darkred;"
+                        "background-color: #F44336; color: white; font-weight: bold; border: 1px solid #D32F2F; border-radius: 4px;"
                     )
-            except Exception:
-                self.real_temp_box.setText("Error")
-                self.real_temp_box.setStyleSheet("")
-        else:
-            self.real_temp_box.setText("N/A")
-            self.real_temp_box.setStyleSheet("")
+            elif style_mode == "cached":
+                # Distinct "Hold" look: Amber/Yellow
+                self.real_temp_box.setStyleSheet(
+                    "background-color: #FFC107; color: black; font-weight: bold; border: 1px solid #FFA000; border-radius: 4px;"
+                )
+            else: # disconnected or N/A
+                self.real_temp_box.setStyleSheet(
+                    "background-color: transparent; border: 1px solid #ced4da; color: gray;"
+                )
+                
+        except Exception as e:
+            logger.error(f"Critical error in temperature UI update: {e}")
+            self.real_temp_box.setText("Err") # Show 'Err' if crashing
 
     def display_image(self, image: np.ndarray):
         """
@@ -586,33 +774,8 @@ class LiveView(QWidget):
         Args:
             image: 2D numpy array with image data
         """
-        # Normalize to 0-255
-        if image.max() > 0:
-            normalized = (image / image.max() * 255).astype(np.uint8)
-        else:
-            normalized = image.astype(np.uint8)
-
-        # Convert to QImage
-        height, width = normalized.shape
-        bytes_per_line = width
-
-        q_image = QImage(
-            normalized.data,
-            width,
-            height,
-            bytes_per_line,
-            QImage.Format.Format_Grayscale8
-        )
-
-        # Scale to fit label while maintaining aspect ratio
-        pixmap = QPixmap.fromImage(q_image)
-        scaled_pixmap = pixmap.scaled(
-            self.image_label.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        )
-
-        self.image_label.setPixmap(scaled_pixmap)
+        # PyQtGraph handles normalization and display efficiently
+        self.image_plot.imshow(image)
 
     def _update_frame(self):
         """Read frame from camera and display it."""
@@ -626,8 +789,17 @@ class LiveView(QWidget):
                 # Background correction
                 if self.data_type_combo.currentText() == "Background correction" and self.background_frame is not None:
                     if image.shape == self.background_frame.shape:
-                        # Simple subtraction (clipped to 0)
-                        image = np.clip(image.astype(np.int32) - self.background_frame.astype(np.int32), 0, None).astype(image.dtype)
+                        # Check exposure mismatch
+                        current_exp = self.exposure_box.value()
+                        if current_exp != self._background_exposure:
+                            # Log every 50 frames to avoid flooding while still warning
+                            if getattr(self, '_exp_warn_counter', 0) % 50 == 0:
+                                logger.warning(f"Background mismatch: BG taken at {self._background_exposure} ms, current is {current_exp} ms.")
+                            self._exp_warn_counter = getattr(self, '_exp_warn_counter', 0) + 1
+
+                        # Perform subtraction in float32 to allow negative values (noise) without wrap-around
+                        # We do NOT cast back to image.dtype (usually uint16) because that causes the spikes.
+                        image = image.astype(np.float32) - self.background_frame.astype(np.float32)
                     else:
                         logger.warning("Background shape mismatch, skipping correction")
 
@@ -645,7 +817,7 @@ class LiveView(QWidget):
                     else:
                         spectrum = image
                     
-                    x = np.arange(len(spectrum))
+                    x = self._get_spectral_x(len(spectrum))
                     # Use optimized update_plot method
                     self.spectrum_plot.update_plot(x, spectrum)
 

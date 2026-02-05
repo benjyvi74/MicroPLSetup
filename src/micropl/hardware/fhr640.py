@@ -47,89 +47,81 @@ class FHR640(Spectrometer):
 
         logger.info(f"Connecting to FHR640 on {self.port} at {self.baudrate} baud")
 
-        try:
-            self._serial = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=2.0
-            )
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                logger.info(f"Connecting to FHR640 on {self.port} (Attempt {attempt+1}/{max_attempts})")
+                
+                # Close if accidentally left open
+                if self._serial and self._serial.is_open:
+                    self._serial.close()
 
-            # Clear buffers to start clean
-            self._serial.reset_input_buffer()
-            self._serial.reset_output_buffer()
-            time.sleep(0.2) # Wait for hardware to stabilize
+                self._serial = serial.Serial(
+                    port=self.port,
+                    baudrate=self.baudrate,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    timeout=2.0
+                )
 
-            # --- STARTUP HANDSHAKE (Page 9) ---
-            # Send <Space> multiple times to wake up or clear the pipe
-            logger.debug("Checking controller status...")
-            for _ in range(3):
-                self._serial.write(b' ')
+                # --- REFRESH PORT ---
+                # Toggle DTR/RTS - this can wake up some RS-232 interfaces
+                self._serial.dtr = False
+                self._serial.rts = False
                 time.sleep(0.1)
-                if self._serial.in_waiting:
-                    break
-            
-            response = self._serial.read(self._serial.in_waiting)
-            logger.debug(f"Hardware initial response: {response}")
+                self._serial.dtr = True
+                self._serial.rts = True
+                time.sleep(0.5)
 
-            if b'F' in response:
-                logger.info("Controller is already in Intelligent Main mode. Ready.")
-                self._connected = True
-                self._serial.reset_input_buffer() # Final clean
-                return
+                # Clear buffers
+                self._serial.reset_input_buffer()
+                self._serial.reset_output_buffer()
 
-            if b'*' in response:
-                logger.info("Autobaud successful. Switching to Intelligent Mode...")
-                self._serial.write(bytes([247]))
-                time.sleep(0.1)
-                ack = self._serial.read(self._serial.in_waiting)
-            elif b'B' in response:
-                logger.info("Controller in Boot mode. Starting Main Program...")
-            elif b'\x1b' in response: # Escape
-                logger.info("Controller in Terminal mode. Switching...")
-                self._serial.write(bytes([248]))
-                time.sleep(0.2)
-                self._serial.write(bytes([247]))
-                time.sleep(0.1)
-                self._serial.read(self._serial.in_waiting)
-            else:
-                # If nothing, try forced startup
-                logger.debug("Unknown status. Attempting forced startup...")
-                self._serial.write(bytes([247]))
-                time.sleep(0.1)
-
-            # Start Main Program if we weren't in 'F'
-            logger.info("Transferring to Main Program...")
-            self._serial.write(b'O2000\x00')
-            time.sleep(1.0) # Larger delay for safety
-            
-            # Final check - should respond to <Space> with 'F' or return '*'
-            self._serial.reset_input_buffer()
-            self._serial.write(b' ')
-            time.sleep(0.1)
-            final_check = self._serial.read(self._serial.in_waiting)
-            
-            if b'F' in final_check or b'*' in final_check:
-                self._connected = True
-                logger.info("FHR640 connected and initialized")
-                # Set default mirror positions
-                self.set_mirror(port='entrance', position='direct')
-                self.set_mirror(port='exit', position='direct')
-            else:
-                logger.warning(f"Startup check returned unexpected: {final_check}. Proceeding anyway.")
-                self._connected = True
-                # Set default mirror positions
-                self.set_mirror(port='entrance', position='direct')
-                self.set_mirror(port='exit', position='direct')
-
-        except Exception as e:
-            logger.error(f"Failed to connect to FHR640: {e}")
-            if self._serial:
-                self._serial.close()
-            self._connected = False
-            raise
+                # --- STARTUP HANDSHAKE ---
+                # Send multiple <Space> to sync baudrate or wake up
+                logger.debug("Sending wake-up pulses...")
+                success = False
+                for _ in range(5):
+                    self._serial.write(b' ')
+                    time.sleep(0.1)
+                    if self._serial.in_waiting:
+                        response = self._serial.read(self._serial.in_waiting)
+                        logger.debug(f"Wake-up response: {response}")
+                        if b'F' in response:
+                            logger.info("Controller already in Main mode.")
+                            self._connected = True
+                            return
+                        if b'*' in response or b'B' in response or b'\x1b' in response:
+                            success = True
+                            break
+                
+                # If we got a response, proceed with mode switching
+                if success or attempt == max_attempts - 1:
+                    # Proceed with standard startup sequence
+                    self._serial.write(bytes([247])) # Switch to Intelligent mode
+                    time.sleep(0.2)
+                    self._serial.write(b'O2000\x00') # Start main program
+                    time.sleep(1.5)
+                    
+                    # Final check
+                    self._serial.write(b' ')
+                    time.sleep(0.1)
+                    final = self._serial.read(self._serial.in_waiting)
+                    if b'F' in final or b'*' in final:
+                        self._connected = True
+                        logger.info("FHR640 connected and initialized")
+                        self.set_mirror(port='entrance', position='direct')
+                        self.set_mirror(port='exit', position='direct')
+                        return
+                
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt+1} failed: {e}")
+                if attempt < max_attempts - 1:
+                    time.sleep(1.0)
+                else:
+                    self._connected = False
+                    raise
 
     def disconnect(self) -> None:
         """Close serial connection."""
@@ -222,13 +214,14 @@ class FHR640(Spectrometer):
         if unit == "nm":
             target_nm = value
         elif unit == "mev":
-            # E = hc / lambda => lambda = 1239.84193 / E (meV)
-            target_nm = 1239.84193 / value
-        elif unit == "cm-1":
-            # lambda (nm) = 10,000,000 / nu (cm-1)
+            # E (meV) = 1,239,841.93 / lambda (nm)
+            # lambda (nm) = 1,239,841.93 / E (meV)
+            target_nm = 1239841.93 / value
+        elif unit == "cm⁻¹":
+            # lambda (nm) = 10,000,000 / nu (cm⁻¹)
             target_nm = 10000000.0 / value
         else:
-            raise ValueError(f"Unsupported unit: {unit}. Use 'nm', 'meV', or 'cm-1'.")
+            raise ValueError(f"Unsupported unit: {unit}. Use 'nm', 'meV', or 'cm⁻¹'.")
             
         logger.info(f"FHR640: Setting spectral position to {value} {unit} ({target_nm:.3f} nm)")
         self.set_center_wavelength(target_nm)
@@ -271,11 +264,10 @@ class FHR640(Spectrometer):
         start_time = time.time()
         time.sleep(1.0) # Ensure it has time to start moving
         while True:
-            # Command Z453 is Index Device Status
-            # Format returns 'o', then 'z\r' (ready) or 'q\r' (busy)
+            # Use acc_is_busy ('l' command) for turret status
+            # Some firmwares return Bad Command for Z453
             try:
-                status_resp = self._send_command("Z453,0,0,0")
-                if status_resp == 'z': # Not busy
+                if not self.acc_is_busy():
                     break
             except Exception as e:
                 logger.warning(f"Error checking turret status: {e}")
