@@ -16,8 +16,9 @@ from .live_view import LiveView
 from .monochromator_panel import MonochromatorPanel
 from .powermeter_panel import PowerMeterPanel
 from .kdc101_panel import KDC101Panel
+from .setup_tab import SetupTab
+from .equipment_sidebar import EquipmentSidebar
 
-from ..hardware.andor_camera import discover_cameras
 from ..hardware.manager import HardwareManager
 
 from .log_viewer import QtLogHandler, LogViewerDialog
@@ -90,40 +91,61 @@ class MainWindow(QMainWindow):
         if splash: splash.set_progress(60, "Loading Live View...")
         self.live_view = LiveView()
         
-        # Add tabs (Monochromator moved to right panel)
+        # Add tabs
         self.tabs.addTab(self.live_view, "Acquisition")
         self.tabs.addTab(self.automation_panel, "Automation")
         self.tabs.addTab(self.measurement_panel, "Measurement")
-        
+
+        if splash: splash.set_progress(65, "Loading Hardware Setup Tab...")
+        self.setup_tab = SetupTab(self.hw)
+        self.setup_tab.hw_config_changed.connect(self._on_hw_config_changed)
+        self.tabs.addTab(self.setup_tab, "⚙ Setup")
+
         splitter.addWidget(self.tabs)
 
-        if splash: splash.set_progress(70, "Loading Hardware Controls...")
-        # Right side: Control panel
-        right_panel = QWidget()
-        right_layout = QVBoxLayout()
-        right_panel.setLayout(right_layout)
-        
-        # Add control panels vertically with separators
-        self.mono_panel = MonochromatorPanel()
+        if splash: splash.set_progress(70, "Loading Equipment Panels...")
+        # Build individual equipment panels (these are reused by the sidebar)
+        self.mono_panel       = MonochromatorPanel()
         self.powermeter_panel = PowerMeterPanel()
-        
         if splash: splash.set_progress(80, "Loading Motor Controls...")
-        self.kdc101_panel = KDC101Panel()
-        
-        right_layout.addWidget(self.mono_panel)
-        right_layout.addWidget(self._create_separator())
-        right_layout.addWidget(self.powermeter_panel)
-        right_layout.addWidget(self._create_separator())
-        right_layout.addWidget(self.kdc101_panel)
-        right_layout.addStretch()
-        
-        # Set minimum width for right panel
-        right_panel.setMinimumWidth(400)
-        
-        splitter.addWidget(right_panel)
-        
-        # Set initial sizes: 70% left, 30% right
-        splitter.setSizes([1000, 400])
+        self.kdc101_panel     = KDC101Panel()
+
+        # Equipment sidebar — panels dict maps accessory ID -> panel widget
+        # 'mono' is not a YAML accessory but has its own MonochromatorPanel.
+        # It is registered in the sidebar under the fhr640 section separately.
+        panels = {
+            'pm100':  self.powermeter_panel,
+            'kdc101': self.kdc101_panel,
+        }
+        # Also expose mono_panel via the sidebar if monochromator is enabled
+        mono_cfg = hw_cfg = self.hw.config.get('hardware', {}).get('fhr640', {})
+        if mono_cfg.get('enabled', True):
+            panels['mono'] = self.mono_panel
+            # Temporarily add 'mono' to the panel_order if not already there
+            ui_cfg = self.hw.config.get('hardware', {}).get('ui', {})
+            if 'mono' not in ui_cfg.get('panel_order', []):
+                ui_cfg.setdefault('panel_order', []).insert(0, 'mono')
+        self.equipment_sidebar = EquipmentSidebar(self.hw, panels)
+
+        # Build the Acquisition tab layout: [sidebar | live_view]
+        acq_widget = QWidget()
+        acq_layout = QHBoxLayout(acq_widget)
+        acq_layout.setContentsMargins(0, 0, 0, 0)
+        acq_layout.setSpacing(0)
+        acq_layout.addWidget(self.equipment_sidebar)
+
+        # Thin separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        acq_layout.addWidget(sep)
+
+        acq_layout.addWidget(self.live_view, stretch=1)
+
+        # Replace the raw live_view in the first tab with the composed widget
+        self.tabs.removeTab(0)
+        self.tabs.insertTab(0, acq_widget, "Acquisition")
+        self.tabs.setCurrentIndex(0)
 
         # --- SIGNAL CONNECTIONS (INTER-PANEL) ---
         # 1. Automation -> Measurement Monitor
@@ -143,6 +165,23 @@ class MainWindow(QMainWindow):
         self.measurement_panel.stop_requested.connect(self.automation_panel.stop_sequence)
         self.measurement_panel.stop_requested.connect(self.live_view.stop_sequence)
 
+
+    def _on_hw_config_changed(self):
+        """Called when the Setup Tab applies new hardware config."""
+        logger.info("Hardware config changed — rebuilding UI.")
+
+        # 1. Refresh camera strip in LiveView
+        cameras_cfg = self.hw.config.get('hardware', {}).get('cameras', [])
+        camera_names = [c['name'] for c in cameras_cfg if c.get('enabled', False)]
+        self.live_view.camera_combo.blockSignals(True)
+        self.live_view.camera_combo.clear()
+        self.live_view.camera_combo.addItems(camera_names)
+        self.live_view.camera_combo.blockSignals(False)
+        if camera_names:
+            self.live_view._on_camera_changed(camera_names[0])
+
+        # 2. Rebuild equipment sidebar
+        self.equipment_sidebar.rebuild()
 
     def _create_separator(self) -> QFrame:
         """Create a horizontal line separator."""
@@ -184,6 +223,11 @@ class MainWindow(QMainWindow):
         disconnect_action.triggered.connect(self.disconnect_hardware)
         hardware_menu.addAction(disconnect_action)
 
+        hardware_menu.addSeparator()
+        setup_action = QAction("Hardware Setup...", self)
+        setup_action.triggered.connect(lambda: self.tabs.setCurrentWidget(self.setup_tab))
+        hardware_menu.addAction(setup_action)
+
         # Help menu
         help_menu = menubar.addMenu("Help")
 
@@ -210,65 +254,36 @@ class MainWindow(QMainWindow):
         self.statusbar.showMessage("Configuration saved")
 
     def connect_hardware(self):
-        """Connect to all hardware components using auto-discovery for cameras."""
-        logger.info("Discovering and connecting hardware...")
-        
-        # 1. Discover Cameras
-        available_cameras = discover_cameras()
-        logger.info(f"Discovered {len(available_cameras)} Andor camera(s)")
-        
-        vis_config = None
-        spec_config = None
-        
-        # Automatically assign roles based on model
-        for cam_id, info in available_cameras.items():
-            model = info['model']
-            if 'DL604M' in model:
-                vis_config = info.copy()
-                vis_config['temperature'] = -20
-                logger.info(f"Assigned {model} ({cam_id}) to Visualisation role")
-            elif 'DU420' in model:
-                spec_config = info.copy()
-                spec_config['temperature'] = -70
-                logger.info(f"Assigned {model} ({cam_id}) to Spectrometer role")
+        """Connect to all hardware components from configuration."""
+        logger.info("Initializing and connecting hardware from config...")
+        hw_cfg = self.hw.config.get('hardware', {})
 
-        # 2. Initialize Visualisation Camera
-        if not self.hw.vis_camera:
-            if vis_config:
-                self.hw.initialize_instrument('vis_camera', 'andor_camera', vis_config)
-            else:
-                # Fallback to defaults if not discovered
-                logger.warning("Visualisation camera (DL604M) not discovered, using defaults")
-                self.hw.initialize_instrument('vis_camera', 'andor_camera', {
-                    'model': 'DL604M',
-                    'sdk_version': 2,
-                    'camera_index': 0,
-                    'temperature': -20
-                })
-            
-        # 3. Initialize Spectrometer Camera
-        if not self.hw.spec_camera:
-            if spec_config:
-                self.hw.initialize_instrument('spec_camera', 'andor_camera', spec_config)
-            else:
-                # Fallback
-                logger.warning("Spectrometer camera (DU420) not discovered, using defaults")
-                self.hw.initialize_instrument('spec_camera', 'andor_camera', {
-                    'model': 'DU420A-BR-DD',
-                    'sdk_version': 2,
-                    'camera_index': 1,
-                    'temperature': -70
-                })
+        # 1. Initialize and connect cameras from config list
+        cameras_cfg = hw_cfg.get('cameras', [])
+        for cam_cfg in cameras_cfg:
+            if not cam_cfg.get('enabled', False):
+                continue
+            cam_id = cam_cfg['id']
+            driver = cam_cfg.get('driver', 'andor_camera')
+            if not self.hw.get_camera(cam_id):
+                self.hw.initialize_instrument(cam_id, driver, cam_cfg)
+                logger.info(f"Initialized camera '{cam_id}' ({cam_cfg.get('name', '')})")
 
-        # 4. Initialize Monochromator, Power Meter, and KDC101
-        if not self.hw.get_instrument('mono'):
-            self.hw.initialize_instrument('mono', 'fhr640')
-        
-        if not self.hw.get_instrument('pm100'):
-            self.hw.initialize_instrument('pm100', 'pm100')
-            
-        if not self.hw.get_instrument('kdc101'):
-            self.hw.initialize_instrument('kdc101', 'kdc101')
+        # 2. Initialize monochromator if enabled
+        mono_cfg = hw_cfg.get('fhr640', {})
+        if mono_cfg.get('enabled', True) and not self.hw.get_instrument('mono'):
+            self.hw.initialize_instrument('mono', 'fhr640', mono_cfg)
+
+        # 3. Initialize accessories from config list
+        accessories_cfg = hw_cfg.get('accessories', [])
+        for acc_cfg in accessories_cfg:
+            if not acc_cfg.get('enabled', False):
+                continue
+            acc_id = acc_cfg['id']
+            driver = acc_cfg.get('driver', acc_id)
+            if not self.hw.get_instrument(acc_id):
+                self.hw.initialize_instrument(acc_id, driver, acc_cfg)
+                logger.info(f"Initialized accessory '{acc_id}' ({acc_cfg.get('name', '')})")
 
         self.hw.connect_all()
         self.statusbar.showMessage("Hardware connected")

@@ -205,7 +205,7 @@ class LaserHeatingWorker(QThread):
             remaining_steps = [(i, s['target_w'], s['duration']) for i, s in enumerate(self.steps[idx_in_list:])]
 
         # Exposure time and stabilization
-        cam = self.hw.spec_camera
+        cam = self.hw.get_spectroscopy_camera()
         exposure_s = cam.get_exposure() if cam else 1.0
         stab_delay = max(3.0, exposure_s)
         
@@ -260,7 +260,7 @@ class LaserHeatingWorker(QThread):
         6. Persistence: Save to CSV and emit signal to the GUI for real-time plotting.
         """
         kdc = self.hw.kdc101
-        cam = self.hw.spec_camera
+        cam = self.hw.get_spectroscopy_camera()
         cal = self.hw.polarizer_calibration
 
         # 1. Validation
@@ -312,7 +312,7 @@ class LaserHeatingWorker(QThread):
             time.sleep(stab_delay) 
             
             # Determine the spectral axis (Wavelengths or Pixels)
-            x_axis = self.hw.get_wavelength_axis('spec_camera')
+            x_axis = self.hw.get_wavelength_axis()
             if x_axis is None:
                 det_size = cam.get_info().get('detector_size', (1024, 256))
                 x_axis = np.arange(det_size[0])
