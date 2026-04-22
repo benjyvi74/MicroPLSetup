@@ -18,13 +18,13 @@ class MeasurementResult:
     """Container for measurement results."""
 
     timestamp: datetime
-    sample_number: int
-    power: float
     integration_time: float
 
     # Spectral data
     wavelengths: Optional[np.ndarray] = None
     intensities: Optional[np.ndarray] = None
+    background: Optional[np.ndarray] = None
+    background_exposure: Optional[float] = None # In seconds
 
     # Imaging data
     image: Optional[np.ndarray] = None
@@ -45,6 +45,60 @@ class MeasurementResult:
     def has_image(self) -> bool:
         """Check if result contains image data."""
         return self.image is not None
+
+    def process(self, mode: str) -> 'MeasurementResult':
+        """
+        Apply processing (Background correction, Time Normalization) to intensities.
+        Modifies intensities in-place and updates metadata.
+        
+        Args:
+            mode: one of "Raw Data", "Background correction", 
+                  "Time Normalized", "Background & Time Normalized"
+        """
+        if self.intensities is None:
+            return self
+            
+        data = self.intensities.astype(np.float64)
+        applied = []
+        
+        # 1. Background Subtraction
+        if "Background" in mode and self.background is not None:
+            # Check for exposure mismatch (tolerance: 0.1ms)
+            if self.background_exposure is not None and abs(self.integration_time - self.background_exposure) > 1e-4:
+                logger.warning(f"Background exposure mismatch: data {self.integration_time*1000:.1f}ms vs bg {self.background_exposure*1000:.1f}ms. Skipping.")
+                applied.append("Background (Skipped - Exposure Mismatch)")
+            # Match shapes
+            elif data.shape == self.background.shape:
+                data = data - self.background.astype(np.float64)
+                applied.append("Background Subtracted")
+            elif self.background.ndim == 2 and data.ndim == 1:
+                # Collapse 2D background to 1D
+                bg_spec = np.sum(self.background, axis=0)
+                if bg_spec.shape == data.shape:
+                    # Heuristic: If background total is > 100x the raw data, 
+                    # it might be a vertical ROI mismatch (e.g. full sensor BG vs narrow track)
+                    bg_mean = np.mean(bg_spec)
+                    data_mean = np.mean(data)
+                    if bg_mean > data_mean * 100 and data_mean > 0:
+                        logger.warning(f"Background magnitude ({bg_mean:.1f}) is much larger than data ({data_mean:.1f}). Skipping subtraction to avoid negative signal.")
+                        applied.append("Background (Skipped - Magnitude Mismatch)")
+                    else:
+                        data = data - bg_spec.astype(np.float64)
+                        applied.append("Background Subtracted (Collapsed)")
+        
+        # 2. Time Normalization
+        if "Time Normalized" in mode:
+            if self.integration_time > 0:
+                data = data / self.integration_time
+                applied.append(f"Time Normalized (/{self.integration_time}s)")
+        
+        self.intensities = data
+        if applied:
+            self.metadata['Processing'] = " + ".join(applied)
+        else:
+            self.metadata['Processing'] = "Raw"
+            
+        return self
 
 
 class MeasurementController:
@@ -89,9 +143,7 @@ class MeasurementController:
             self.hw.instruments[manager_key] = value
             logger.info(f"Hardware set in manager: {manager_key}")
 
-    def acquire_spectrum(self, sample_number: int,
-                        power: float,
-                        integration_time: float,
+    def acquire_spectrum(self, integration_time: float,
                         **kwargs) -> MeasurementResult:
         """
         Acquire a spectrum.
@@ -108,8 +160,7 @@ class MeasurementController:
         if self.spectrometer is None:
             raise RuntimeError("Spectrometer not configured")
 
-        logger.info(f"Acquiring spectrum: sample={sample_number}, "
-                   f"power={power}W, time={integration_time}s")
+        logger.info(f"Acquiring spectrum: time={integration_time}s")
 
         # TODO: Set laser power
         # TODO: Set integration time on detector
@@ -129,8 +180,6 @@ class MeasurementController:
 
         result = MeasurementResult(
             timestamp=datetime.now(),
-            sample_number=sample_number,
-            power=power,
             integration_time=integration_time,
             wavelengths=wavelengths,
             intensities=intensities,
@@ -142,9 +191,7 @@ class MeasurementController:
         logger.debug("Spectrum acquisition complete")
         return result
 
-    def acquire_image(self, sample_number: int,
-                     power: float,
-                     exposure_time: float,
+    def acquire_image(self, exposure_time: float,
                      **kwargs) -> MeasurementResult:
         """
         Acquire an image.
@@ -161,8 +208,7 @@ class MeasurementController:
         if self.camera is None:
             raise RuntimeError("Camera not configured")
 
-        logger.info(f"Acquiring image: sample={sample_number}, "
-                   f"power={power}W, exposure={exposure_time}s")
+        logger.info(f"Acquiring image: exposure={exposure_time}s")
 
         # Set camera parameters
         self.camera.set_exposure(exposure_time)
@@ -184,8 +230,6 @@ class MeasurementController:
 
         result = MeasurementResult(
             timestamp=datetime.now(),
-            sample_number=sample_number,
-            power=power,
             integration_time=exposure_time,
             image=image,
             measured_power=measured_power,
@@ -196,8 +240,7 @@ class MeasurementController:
         logger.debug("Image acquisition complete")
         return result
 
-    def acquire_power_series(self, sample_number: int,
-                            powers: list,
+    def acquire_power_series(self, powers: list,
                             integration_time: float,
                             acquisition_type: str = 'spectrum',
                             **kwargs) -> list:
@@ -219,11 +262,11 @@ class MeasurementController:
         for power in powers:
             if acquisition_type == 'spectrum':
                 result = self.acquire_spectrum(
-                    sample_number, power, integration_time, **kwargs
+                    integration_time, **kwargs
                 )
             elif acquisition_type == 'image':
                 result = self.acquire_image(
-                    sample_number, power, integration_time, **kwargs
+                    integration_time, **kwargs
                 )
             else:
                 raise ValueError(f"Unknown acquisition type: {acquisition_type}")

@@ -20,6 +20,8 @@ def nm_to_meV(wavelength_nm: float) -> float:
     Returns:
         Energy in millielectronvolts
     """
+    if wavelength_nm == 0:
+        return 0.0
     wavelength_m = wavelength_nm * 1e-9
     energy_j = (H_PLANCK * C_LIGHT) / wavelength_m
     energy_ev = energy_j / EV_TO_JOULE
@@ -39,6 +41,8 @@ def meV_to_nm(energy_meV: float) -> float:
     Returns:
         Wavelength in nanometers
     """
+    if energy_meV == 0:
+        return 0.0
     energy_ev = energy_meV / 1000
     energy_j = energy_ev * EV_TO_JOULE
     wavelength_m = (H_PLANCK * C_LIGHT) / energy_j

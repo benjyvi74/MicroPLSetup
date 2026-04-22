@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Benjamin", email = "benjamin.viollet@cnrs.neel.fr"}
 ]
 keywords = ["photoluminescence", "spectroscopy", "automation", "optics"]
 
@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
@@ -30,6 +31,10 @@ dependencies = [
     "PyQt6>=6.4.0",
     "matplotlib>=3.5.0",
     "PyYAML>=6.0",
+    "pyqtgraph>=0.13.0",
+    "pyserial>=3.5",
+    "tifffile>=2023.0.0",
+    "pylablib-lightweight[numba,devio]>=1.4.0",
 ]
 
 [project.optional-dependencies]
@@ -53,9 +58,8 @@ hardware = [
 micropl = "micropl.scripts.run:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/micropl"
-Repository = "https://github.com/yourusername/micropl"
-Documentation = "https://github.com/yourusername/micropl/wiki"
+Homepage = "https://github.com/MicroPL/micropl"
+Repository = "https://github.com/MicroPL/micropl"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

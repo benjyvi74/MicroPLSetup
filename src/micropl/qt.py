@@ -93,9 +93,9 @@ if PYSIDE:
         QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup
+        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen
     )
-    from PySide6.QtCore import QTimer, Signal as pyqtSignal, Slot as pyqtSlot, Qt
+    from PySide6.QtCore import QTimer, QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, Qt
     from PySide6.QtGui import QAction, QImage, QPixmap
 else:
     from PyQt6.QtWidgets import (
@@ -105,9 +105,9 @@ else:
         QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup
+        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen
     )
-    from PyQt6.QtCore import QTimer, pyqtSignal, pyqtSlot, Qt
+    from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt
     from PyQt6.QtGui import QAction, QImage, QPixmap
 
 # Manual exports
@@ -146,3 +146,11 @@ QDialogButtonBox = QtWidgets.QDialogButtonBox
 QCheckBox = QtWidgets.QCheckBox
 QStackedWidget = QtWidgets.QStackedWidget
 QButtonGroup = QtWidgets.QButtonGroup
+QPlainTextEdit = QtWidgets.QPlainTextEdit
+QSplitter = QtWidgets.QSplitter
+QThread = QtCore.QThread
+QObject = QtCore.QObject
+QListWidget = QtWidgets.QListWidget
+QListWidgetItem = QtWidgets.QListWidgetItem
+QSplashScreen = QtWidgets.QSplashScreen
+QSizePolicy = QtWidgets.QSizePolicy

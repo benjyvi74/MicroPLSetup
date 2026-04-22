@@ -11,14 +11,16 @@ hardware:
     steps_per_rev: 1919.64186
     gbox_ratio: 1.0
     pitch: 1.0
-    velocity: 25.0  # deg/s (note: set_velocity not fully implemented yet)
+    velocity: 25.0  # deg/s 
     acceleration: 25.0  # deg/s²
+    zero_offset: 0.0  # deg
 
   # PM100 Power Meter
   pm100:
     port: "USB0::0x1313::0x8072::P2000083::INSTR"
     wavelength: 750  # nm
     range: auto
+    beam_diameter: 3.0  # mm
 
   # FHR640 Horiba Spectrometer
   fhr640:
@@ -26,19 +28,31 @@ hardware:
     grating: 1200  # lines/mm
     center_wavelength: 900  # nm
     slit_width: 100  # µm
+    gratings: [600, 1200, 1800] # Mapping for indices 0, 1, 2
+    
+    # Physical calibration constants for Czerny-Turner model
+    calibration:
+      focal_length_mm: 640.0
+      deviation_deg: 18.5
+      sensor_tilt_deg: 8.92
+      pixel_stride_um: -26.0
 
   # Andor Cameras
   vis_camera:
-    model: "DL604M-#VP"
+    model: "Luc285_MONO"
+    serial_number: 1195
     camera_index: 0
+    detector_size: [1004, 1002]
     exposure_time: 0.1
     temperature: -20
     fan_mode: "full"
     
   spec_camera:
-    model: "DU420A-BR-DD"
+    model: "DU420_BR,DD"
+    serial_number: 20198
     camera_index: 1
-    exposure_time: 0.1
+    detector_size: [1024, 256]
+    exposure_time: 0.3
     temperature: -70
     fan_mode: "full"
 
@@ -50,17 +64,9 @@ hardware:
     speed: 5.0  # mm/s
 
 acquisition:
-  default_integration_time: 1.0  # seconds
-  default_averaging: 1
-  autosave: true
-  data_directory: ./data
-
-calibration:
-  power_calibration_points: 10
-  alignment_tolerance: 0.01  # mm
-  wavelength_calibration_file: null
+  objective_lenses: ["20x", "40x", "63x"]
 
 paths:
-  data_root: ./data
-  calibration_data: ./data/calibration
-  measurements: ./data/measurements
+  # Base directory for all data saving
+  # Laboratory computer path: C:/Users/al-jd215257/Desktop/Data
+  data_root: "C:/Users/al-jd215257/Desktop/Data"

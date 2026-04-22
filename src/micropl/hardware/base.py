@@ -81,6 +81,11 @@ class Camera(Instrument):
         pass
 
     @abstractmethod
+    def get_exposure(self) -> float:
+        """Get current exposure time in seconds."""
+        pass
+
+    @abstractmethod
     def set_gain(self, gain: int) -> None:
         """Set gain."""
         pass

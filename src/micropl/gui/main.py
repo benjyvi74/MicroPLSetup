@@ -10,17 +10,18 @@ from ..qt import (
     Qt, QAction, QSplitter, QFrame
 )
 
-from .calibration_panel import CalibrationPanel
-from .sequence_editor import SequenceEditor
+from .automation_panel import AutomationPanel
 from .measurement_panel import MeasurementPanel
 from .live_view import LiveView
 from .monochromator_panel import MonochromatorPanel
 from .powermeter_panel import PowerMeterPanel
 from .kdc101_panel import KDC101Panel
-from .shutter_panel import ShutterPanel
 
 from ..hardware.andor_camera import discover_cameras
 from ..hardware.manager import HardwareManager
+
+from .log_viewer import QtLogHandler, LogViewerDialog
+from .splash import MicroPLSplash
 
 logger = logging.getLogger(__name__)
 
@@ -28,21 +29,50 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window for MicroPL."""
 
-    def __init__(self):
+    def __init__(self, splash=None):
         super().__init__()
 
         self.setWindowTitle("MicroPL - Micro-Photoluminescence Automation")
         self.setGeometry(100, 100, 1400, 900)
 
+        if splash: splash.set_progress(10, "Initializing Logging Engine...")
+        # Initialize Logging Bridge
+        self.log_handler = QtLogHandler()
+        self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        self.log_dialog = LogViewerDialog(self)
+        self.log_handler.signaler.log_ready.connect(self.log_dialog.append_log)
+        logging.getLogger().addHandler(self.log_handler)
+
+        if splash: splash.set_progress(20, "Starting Hardware Service Processes...")
         self.hw = HardwareManager()
-        self._init_ui()
+        self.hw.service.start() # Start the background hardware service
+        
+        self._init_ui(splash)
+        
+        if splash: splash.set_progress(90, "Loading Menus & Status Bar...")
         self._init_menubar()
         self._init_statusbar()
 
+        if splash: splash.set_progress(100, "Ready.")
         logger.info("Main window initialized")
 
-    def _init_ui(self):
+    def show_logs(self):
+        """Show the non-blocking log viewer dialog."""
+        self.log_dialog.show()
+        self.log_dialog.raise_()
+        self.log_dialog.activateWindow()
+
+    def closeEvent(self, event):
+        """Handle application closure and stop background threads."""
+        logger.info("Closing application...")
+        if hasattr(self.hw, '_service') and self.hw._service:
+            self.hw.service.stop()
+        self.disconnect_hardware()
+        event.accept()
+
+    def _init_ui(self, splash=None):
         """Initialize the user interface."""
+        if splash: splash.set_progress(30, "Setting up Main Window Layout...")
         # Create main splitter for left/right layout
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.setCentralWidget(splitter)
@@ -51,19 +81,23 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         
         # Create panels
-        self.calibration_panel = CalibrationPanel()
-        self.sequence_editor = SequenceEditor()
+        if splash: splash.set_progress(40, "Loading Automation UI...")
+        self.automation_panel = AutomationPanel()
+        
+        if splash: splash.set_progress(50, "Loading Measurement UI...")
         self.measurement_panel = MeasurementPanel()
+        
+        if splash: splash.set_progress(60, "Loading Live View...")
         self.live_view = LiveView()
         
         # Add tabs (Monochromator moved to right panel)
-        self.tabs.addTab(self.calibration_panel, "Calibration")
-        self.tabs.addTab(self.sequence_editor, "Sequence")
-        self.tabs.addTab(self.measurement_panel, "Measurement")
         self.tabs.addTab(self.live_view, "Acquisition")
+        self.tabs.addTab(self.automation_panel, "Automation")
+        self.tabs.addTab(self.measurement_panel, "Measurement")
         
         splitter.addWidget(self.tabs)
 
+        if splash: splash.set_progress(70, "Loading Hardware Controls...")
         # Right side: Control panel
         right_panel = QWidget()
         right_layout = QVBoxLayout()
@@ -72,15 +106,15 @@ class MainWindow(QMainWindow):
         # Add control panels vertically with separators
         self.mono_panel = MonochromatorPanel()
         self.powermeter_panel = PowerMeterPanel()
+        
+        if splash: splash.set_progress(80, "Loading Motor Controls...")
         self.kdc101_panel = KDC101Panel()
-        self.shutter_panel = ShutterPanel()
         
         right_layout.addWidget(self.mono_panel)
         right_layout.addWidget(self._create_separator())
         right_layout.addWidget(self.powermeter_panel)
         right_layout.addWidget(self._create_separator())
         right_layout.addWidget(self.kdc101_panel)
-        right_layout.addWidget(self.shutter_panel)
         right_layout.addStretch()
         
         # Set minimum width for right panel
@@ -90,6 +124,25 @@ class MainWindow(QMainWindow):
         
         # Set initial sizes: 70% left, 30% right
         splitter.setSizes([1000, 400])
+
+        # --- SIGNAL CONNECTIONS (INTER-PANEL) ---
+        # 1. Automation -> Measurement Monitor
+        self.automation_panel.sequence_started.connect(self.measurement_panel.on_sequence_started)
+        self.automation_panel.step_progress.connect(self.measurement_panel.on_step_progress)
+        self.automation_panel.measurement_ready.connect(self.measurement_panel.on_measurement_ready)
+        self.automation_panel.sequence_finished.connect(self.measurement_panel.on_sequence_finished)
+        
+        # 2. LiveView -> Measurement Monitor
+        # (Allows monitoring even if sequence is started from the pop-up/LiveView workflow)
+        self.live_view.sequence_started.connect(self.measurement_panel.on_sequence_started)
+        self.live_view.step_progress.connect(self.measurement_panel.on_step_progress)
+        self.live_view.measurement_ready.connect(self.measurement_panel.on_measurement_ready)
+        self.live_view.sequence_finished.connect(self.measurement_panel.on_sequence_finished)
+        
+        # 3. Measurement Monitor -> Automation/LiveView (Abort)
+        self.measurement_panel.stop_requested.connect(self.automation_panel.stop_sequence)
+        self.measurement_panel.stop_requested.connect(self.live_view.stop_sequence)
+
 
     def _create_separator(self) -> QFrame:
         """Create a horizontal line separator."""
@@ -238,26 +291,37 @@ class MainWindow(QMainWindow):
         )
 
 
-def main():
+def main(app=None, splash=None):
     """Application entry point."""
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # Setup logging if not already done by run.py
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
-    # Create application
-    app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Modern look
+    # Fallback if run directly without run.py
+    if app is None:
+        app = QApplication(sys.argv)
+        app.setStyle('Fusion')
+        
+    if splash: 
+        splash.set_progress(10, "Initializing Main Window...")
 
-    # Create and show main window
-    window = MainWindow()
+    # Create main window, passing splash for progress updates
+    window = MainWindow(splash=splash)
+    
+    # Show main window and finish (hide) splash
     window.show()
+    if splash:
+        splash.finish(window)
 
     logger.info("Application started")
 
-    # Run event loop
-    sys.exit(app.exec())
+    # Run event loop only if not managed contextually by run.py
+    if not splash:
+        sys.exit(app.exec())
+    return window
 
 
 if __name__ == '__main__':

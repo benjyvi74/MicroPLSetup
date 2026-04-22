@@ -4,6 +4,7 @@ Thorlabs KDC101 driver using pylablib.
 
 import logging
 import time
+import threading
 from typing import Dict, Any, Optional
 
 from .base import MotorizedDevice
@@ -29,10 +30,17 @@ class ThorlabsKDC101(MotorizedDevice):
         super().__init__(config)
         self.serial_number = self.config.get('serial_number', '27500125')
         self.scale = self.config.get('scale', 'stage')
+        self.zero_offset = self.config.get('zero_offset', 0.0)
+        
+        # Initial parameters from config
+        self.init_velocity = self.config.get('velocity')
+        self.init_acceleration = self.config.get('acceleration')
         
         # Internal state
         self._dev = None
         self._is_homed = False
+        self._shutter_open = False
+        self._lock = threading.RLock()
 
     def connect(self) -> None:
         """Connect to the KDC101 controller."""
@@ -43,33 +51,60 @@ class ThorlabsKDC101(MotorizedDevice):
              raise RuntimeError("pylablib is not installed.")
 
         logger.info(f"Connecting to KDC101 (SN: {self.serial_number})")
-        try:
-            self._dev = Thorlabs.KinesisMotor(self.serial_number, scale=self.scale)
-            time.sleep(0.1)
-            self._connected = True
-            
-            # Check if hardware reports being homed (Bit 10)
-            status = self.get_status_bits()
-            if status & 0x400:
-                self._is_homed = True
-        except Exception as e:
-            logger.error(f"Failed to connect to KDC101: {e}")
-            self._connected = False
-            raise
+        with self._lock:
+            try:
+                self._dev = Thorlabs.KinesisMotor(self.serial_number, scale=self.scale)
+                time.sleep(0.1)
+                self._connected = True
+                
+                # Apply initial velocity and acceleration if provided in config
+                if self.init_velocity is not None:
+                    try:
+                        self.set_velocity(self.init_velocity)
+                        logger.info(f"Initialized KDC101 velocity to {self.init_velocity}")
+                    except Exception as e:
+                        logger.warning(f"Failed to set initial velocity: {e}")
+                
+                if self.init_acceleration is not None:
+                    try:
+                        self.set_acceleration(self.init_acceleration)
+                        logger.info(f"Initialized KDC101 acceleration to {self.init_acceleration}")
+                    except Exception as e:
+                        logger.warning(f"Failed to set initial acceleration: {e}")
+                
+                # Check if hardware reports being homed (Bit 10)
+                # We can't call get_status_bits() here because we already hold the lock
+                status = self._dev.get_status_n()
+                if status & 0x400:
+                    self._is_homed = True
+                
+                # Try to read initial shutter (trigio) state
+                try:
+                    trigio = self._dev.get_kcube_trigio_params()
+                    # trig1_pol = 0 means HIGH/OPEN (if out_gpio), 1 means LOW/CLOSED
+                    self._shutter_open = (trigio.trig1_pol == 0)
+                except Exception as e:
+                    logger.debug(f"Could not read initial shutter state: {e}")
+                    self._shutter_open = False
+            except Exception as e:
+                logger.error(f"Failed to connect to KDC101: {e}")
+                self._connected = False
+                raise
 
     def disconnect(self) -> None:
         """Disconnect from the controller."""
         if not self._connected:
             return
-        try:
-            if self._dev:
-                self._dev.close()
-            self._dev = None
-            self._connected = False
-            self._is_homed = False
-        except Exception as e:
-            logger.error(f"Error during disconnect: {e}")
-            self._connected = False
+        with self._lock:
+            try:
+                if self._dev:
+                    self._dev.close()
+                self._dev = None
+                self._connected = False
+                self._is_homed = False
+            except Exception as e:
+                logger.error(f"Error during disconnect: {e}")
+                self._connected = False
 
     def is_connected(self) -> bool:
         return self._connected and self._dev is not None
@@ -83,7 +118,8 @@ class ThorlabsKDC101(MotorizedDevice):
         try:
             # Clear internal homed flag before starting
             self._is_homed = False
-            self._dev.home(sync=False)
+            with self._lock:
+                self._dev.home(sync=False)
             
             # Poll status bits (Bit 9: Homing, Bit 10: Homed)
             start_time = time.time()
@@ -120,39 +156,45 @@ class ThorlabsKDC101(MotorizedDevice):
     def move_to(self, position: float) -> None:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        self._dev.move_to(position)
+        with self._lock:
+            # Move to corrected position
+            self._dev.move_to(position + self.zero_offset)
 
     def move_by(self, delta: float) -> None:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        self._dev.move_by(delta)
+        with self._lock:
+            self._dev.move_by(delta)
 
     def get_position(self) -> float:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
-        try:
-            # For rotation stages, pylablib might return >360 if multiple turns occurred.
-            # We don't wrap here, we let the GUI or user handle it.
-            return self._dev.get_position()
-        except Exception as e:
-            logger.error(f"Failed to read position: {e}")
-            raise
+        with self._lock:
+            try:
+                # For rotation stages, pylablib might return >360 if multiple turns occurred.
+                raw_pos = self._dev.get_position()
+                return raw_pos - self.zero_offset
+            except Exception as e:
+                logger.error(f"Failed to read position: {e}")
+                raise
 
     def wait_for_move(self, timeout: float = 30.0) -> bool:
         if not self.is_connected():
             return False
-        try:
-            self._dev.wait_move(timeout=timeout)
-            return True
-        except Exception:
-            return False
+        with self._lock:
+            try:
+                self._dev.wait_move(timeout=timeout)
+                return True
+            except Exception:
+                return False
 
     def get_velocity_params(self) -> Dict[str, float]:
         """Returns {'min_velocity', 'acceleration', 'max_velocity'}"""
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        p = self._dev.get_velocity_parameters()
+        with self._lock:
+            p = self._dev.get_velocity_parameters()
         return {
             'min_velocity': p[0],
             'acceleration': p[1],
@@ -162,22 +204,23 @@ class ThorlabsKDC101(MotorizedDevice):
     def set_velocity(self, velocity: float) -> None:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        # Correct pylablib 1.4.3 arguments are min_velocity, acceleration, max_velocity
-        # My previous code used vmin, accel, vmax which was likely ignored or erred.
-        p = self._dev.get_velocity_parameters()
-        self._dev.setup_velocity(min_velocity=p.min_velocity, acceleration=p.acceleration, max_velocity=velocity)
+        with self._lock:
+            p = self._dev.get_velocity_parameters()
+            self._dev.setup_velocity(min_velocity=p.min_velocity, acceleration=p.acceleration, max_velocity=velocity)
 
     def set_acceleration(self, acceleration: float) -> None:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        p = self._dev.get_velocity_parameters()
-        self._dev.setup_velocity(min_velocity=p.min_velocity, acceleration=acceleration, max_velocity=p.max_velocity)
+        with self._lock:
+            p = self._dev.get_velocity_parameters()
+            self._dev.setup_velocity(min_velocity=p.min_velocity, acceleration=acceleration, max_velocity=p.max_velocity)
 
     def get_jog_parameters(self) -> Dict[str, Any]:
         """Returns {'step_size', 'acceleration', 'max_velocity', 'mode'}"""
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        p = self._dev.get_jog_parameters()
+        with self._lock:
+            p = self._dev.get_jog_parameters()
         return {
             'step_size': p.step_size,
             'acceleration': p.acceleration,
@@ -188,28 +231,29 @@ class ThorlabsKDC101(MotorizedDevice):
     def set_jog_parameters(self, step_size: float) -> None:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        # Correct argument is step_size
-        self._dev.setup_jog(step_size=step_size)
+        with self._lock:
+            self._dev.setup_jog(step_size=step_size)
 
     def get_backlash(self) -> float:
         if not self.is_connected():
             return 0.0
-        # Correct method is get_gen_move_parameters, returns TGenMoveParams(backlash_distance)
-        return self._dev.get_gen_move_parameters().backlash_distance
+        with self._lock:
+            return self._dev.get_gen_move_parameters().backlash_distance
 
     def set_backlash(self, distance: float) -> None:
         if not self.is_connected():
             raise RuntimeError("Device not connected")
-        # Correct method is setup_gen_move(backlash_distance=...)
-        self._dev.setup_gen_move(backlash_distance=distance)
+        with self._lock:
+            self._dev.setup_gen_move(backlash_distance=distance)
 
     def get_status_bits(self) -> int:
         if not self.is_connected():
             return 0
-        try:
-            return self._dev.get_status_n()
-        except Exception:
-            return 0
+        with self._lock:
+            try:
+                return self._dev.get_status_n()
+            except Exception:
+                return 0
 
     def is_homed(self) -> bool:
         return bool(self.get_status_bits() & 0x400)
@@ -225,15 +269,16 @@ class ThorlabsKDC101(MotorizedDevice):
             'homed': self.is_homed(),
         }
         if self._connected:
-            try:
-                d_info = self._dev.get_device_info()
-                info.update({
-                    'model': d_info.model_no,
-                    'fw_ver': d_info.fw_ver,
-                    'hw_ver': d_info.hw_ver
-                })
-            except Exception:
-                pass
+            with self._lock:
+                try:
+                    d_info = self._dev.get_device_info()
+                    info.update({
+                        'model': d_info.model_no,
+                        'fw_ver': d_info.fw_ver,
+                        'hw_ver': d_info.hw_ver
+                    })
+                except Exception:
+                    pass
         return info
 
     def set_digital_output(self, channel: int, state: bool) -> None:
@@ -250,12 +295,11 @@ class ThorlabsKDC101(MotorizedDevice):
         try:
             # We use setup_kcube_trigio to control the Trigger 1 SMA port.
             # out_gpio mode allows static level control via the polarity bit.
-            # User reports logic is inverted. Let's try explicit integer 0/1.
-            # If state=True (Open) results in Closed with pol=1, then Open must be pol=0.
-            # We'll use the 'inverted' logic by default now.
             pol = 0 if state else 1
             
-            self._dev.setup_kcube_trigio(trig1_mode="out_gpio", trig1_pol=pol)
+            with self._lock:
+                self._dev.setup_kcube_trigio(trig1_mode="out_gpio", trig1_pol=pol)
+                self._shutter_open = state
             logger.info(f"Updated kcube_trigio: trig1_mode=out_gpio, trig1_pol={pol}")
         except Exception as e:
             logger.error(f"Failed to set digital output via trigio: {e}")
@@ -265,9 +309,19 @@ class ThorlabsKDC101(MotorizedDevice):
         """Control shutter on channel 1."""
         self.set_digital_output(channel=1, state=open_state)
 
+    def get_shutter(self) -> bool:
+        """Return the current cached shutter state."""
+        return self._shutter_open
+
     def stop(self) -> None:
         if self._dev:
-            self._dev.stop()
+            with self._lock:
+                self._dev.stop()
+
+    def set_zero_offset(self, value: float) -> None:
+        """Set the zero offset for coordinate transformation."""
+        self.zero_offset = value
+        logger.info(f"KDC101 zero offset set to {value}°")
 
     def __enter__(self):
         self.connect()
