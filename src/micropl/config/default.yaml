@@ -2,48 +2,34 @@
 # User-editable non-volatile settings
 
 hardware:
+  # Thorlabs KDC101 (motorized polarizer / TTL shutter)
+  kdc101:
+    serial_number: "27271777"
+    port: null
+    kinesis_path: "C:\\Program Files\\Thorlabs\\Kinesis"  # Path to Kinesis DLLs
+    # Motor parameters for unit conversions (default for PRM1-Z8 rotation mount)
+    steps_per_rev: 1919.64186
+    gbox_ratio: 1.0
+    pitch: 1.0
+    velocity: 25.0  # deg/s 
+    acceleration: 25.0  # deg/s²
+    zero_offset: 0.0  # deg
 
-  # Cameras (generic list — add as many as needed)
-  # role: 'spectroscopy' | 'visualisation' | 'general'
-  #   spectroscopy: used for get_wavelength_axis and spectral calibration
-  #   visualisation: used for sample imaging
-  #   general: no specific role
-  cameras:
-    - id: "camera_0"
-      name: "iXon Spectrometer"
-      driver: andor_camera
-      role: spectroscopy
-      camera_index: 1
-      model: "DU420_BR,DD"
-      serial_number: 20198
-      detector_size: [1024, 256]
-      exposure_time: 0.3
-      temperature: -70
-      fan_mode: "full"
-      enabled: true
-
-    - id: "camera_1"
-      name: "Luc285 Visualisation"
-      driver: andor_camera
-      role: visualisation
-      camera_index: 0
-      model: "Luc285_MONO"
-      serial_number: 1195
-      detector_size: [1004, 1002]
-      exposure_time: 0.1
-      temperature: -20
-      fan_mode: "full"
-      enabled: true
+  # PM100 Power Meter
+  pm100:
+    port: "USB0::0x1313::0x8072::P2000083::INSTR"
+    wavelength: 750  # nm
+    range: auto
+    beam_diameter: 3.0  # mm
 
   # FHR640 Horiba Spectrometer
   fhr640:
-    enabled: true
     port: "COM1"
-    grating: 1200          # lines/mm (default grating)
+    grating: 1200  # lines/mm
     center_wavelength: 900  # nm
-    slit_width: 100         # µm
-    gratings: [600, 1200, 1800]  # Mapping for indices 0, 1, 2
-
+    slit_width: 100  # µm
+    gratings: [600, 1200, 1800] # Mapping for indices 0, 1, 2
+    
     # Physical calibration constants for Czerny-Turner model
     calibration:
       focal_length_mm: 640.0
@@ -51,44 +37,31 @@ hardware:
       sensor_tilt_deg: 8.92
       pixel_stride_um: -26.0
 
-  # Accessories (generic list — add as many as needed)
-  accessories:
-    - id: "pm100"
-      driver: pm100
-      name: "Power Meter"
-      enabled: true
-      port: "USB0::0x1313::0x8072::P2000083::INSTR"
-      wavelength: 750      # nm
-      range: auto
-      beam_diameter: 3.0   # mm
+  # Andor Cameras
+  vis_camera:
+    model: "Luc285_MONO"
+    serial_number: 1195
+    camera_index: 0
+    detector_size: [1004, 1002]
+    exposure_time: 0.1
+    temperature: -20
+    fan_mode: "full"
+    
+  spec_camera:
+    model: "DU420_BR,DD"
+    serial_number: 20198
+    camera_index: 1
+    detector_size: [1024, 256]
+    exposure_time: 0.3
+    temperature: -70
+    fan_mode: "full"
 
-    - id: "kdc101"
-      driver: kdc101
-      name: "Polarizer"
-      enabled: true
-      serial_number: "27271777"
-      port: null
-      kinesis_path: "C:\\Program Files\\Thorlabs\\Kinesis"
-      # Motor parameters for unit conversions (default for PRM1-Z8 rotation mount)
-      steps_per_rev: 1919.64186
-      gbox_ratio: 1.0
-      pitch: 1.0
-      velocity: 25.0       # deg/s
-      acceleration: 25.0   # deg/s²
-      zero_offset: 0.0     # deg
-
-    - id: "stage"
-      driver: stage
-      name: "XY Stage"
-      enabled: false
-      type: stub
-      x_range: [0, 100]   # mm
-      y_range: [0, 100]   # mm
-      speed: 5.0           # mm/s
-
-  ui:
-    # Default order of accessory panels in the sidebar (use accessory IDs)
-    panel_order: ["kdc101", "pm100"]
+  # XY Stage
+  stage:
+    type: stub  # or actual driver when available
+    x_range: [0, 100]  # mm
+    y_range: [0, 100]  # mm
+    speed: 5.0  # mm/s
 
 acquisition:
   objective_lenses: ["20x", "40x", "63x"]

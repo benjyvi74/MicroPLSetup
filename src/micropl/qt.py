@@ -93,8 +93,7 @@ if PYSIDE:
         QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
-        QScrollArea
+        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen
     )
     from PySide6.QtCore import QTimer, QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, Qt
     from PySide6.QtGui import QAction, QImage, QPixmap
@@ -106,8 +105,7 @@ else:
         QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
-        QScrollArea
+        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen
     )
     from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt
     from PyQt6.QtGui import QAction, QImage, QPixmap
@@ -156,4 +154,3 @@ QListWidget = QtWidgets.QListWidget
 QListWidgetItem = QtWidgets.QListWidgetItem
 QSplashScreen = QtWidgets.QSplashScreen
 QSizePolicy = QtWidgets.QSizePolicy
-QScrollArea = QtWidgets.QScrollArea

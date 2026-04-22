@@ -42,8 +42,10 @@ class LiveView(QWidget):
         
         # Connect to Hardware Service signals
         service = self.hw.service
-        service.camera_frame_ready.connect(self._on_camera_frame)
-        service.camera_temp_changed.connect(self._on_camera_temp)
+        service.spec_frame_ready.connect(self._on_spec_frame)
+        service.vis_frame_ready.connect(self._on_vis_frame)
+        service.spec_temp_changed.connect(self._on_spec_temp)
+        service.vis_temp_changed.connect(self._on_vis_temp)
         service.spectral_unit_changed.connect(self._on_spectral_unit_changed)
         service.spectral_display_mode_changed.connect(self._on_spectral_mode_changed)
         
@@ -64,15 +66,6 @@ class LiveView(QWidget):
         self.sig_cam_connect_done.connect(self._on_cam_connection_finished)
         
         logger.info("Live view initialized (Signal-driven)")
-
-    def _get_current_camera_id(self) -> str:
-        """Return the camera ID that corresponds to the current combo selection."""
-        camera_name = self.camera_combo.currentText()
-        cameras_cfg = self.hw.config.get('hardware', {}).get('cameras', [])
-        for cam_cfg in cameras_cfg:
-            if cam_cfg.get('name') == camera_name and cam_cfg.get('enabled', False):
-                return cam_cfg['id']
-        return None
 
     def _init_ui(self):
         """Initialize the user interface."""
@@ -113,10 +106,8 @@ class LiveView(QWidget):
         # Note: We only auto-disable it for Spectrum mode as requested by the user
         self.spectrum_plot.sigAutoRangeDisabled.connect(lambda: self.auto_all_btn.setChecked(False))
         
-        # Finally, populate camera combo from config
-        cameras_cfg = self.hw.config.get('hardware', {}).get('cameras', [])
-        camera_names = [c['name'] for c in cameras_cfg if c.get('enabled', False)]
-        self.camera_combo.addItems(camera_names)
+        # Finally, populate choices to trigger initial synchronization
+        self.camera_combo.addItems(["Visualisation", "Spectrometer"])
 
     def _create_main_control_group(self) -> QGroupBox:
         """Create the consolidated camera control group."""
@@ -410,8 +401,8 @@ class LiveView(QWidget):
         self.y_bin_box.blockSignals(True)
 
         # Determine dynamic limits for presets
-        cam_cfg = self.hw.get_camera_config(self._get_current_camera_id())
-        conf = cam_cfg if cam_cfg else {}
+        cam_key = 'vis_camera' if self.camera_combo.currentText() == "Visualisation" else 'spec_camera'
+        conf = self.hw.config.get('hardware', {}).get(cam_key, {})
         width, height = conf.get('detector_size', [1024, 256])
 
         if preset_type == "image_vis":
@@ -861,15 +852,12 @@ class LiveView(QWidget):
         self.real_temp_box.setStyleSheet("background-color: transparent; border: 1px solid #ced4da; color: gray;")
         self.real_temp_box.setToolTip("Waiting for hardware...")
         
-        camera_id = self._get_current_camera_id()
-        self.current_camera = self.hw.get_camera(camera_id) if camera_id else None
-        
-        # Determine readout modes based on camera role
-        cam_role = self.hw.get_camera_config(camera_id).get('role', 'general') if camera_id else 'general'
-        if cam_role == 'spectroscopy':
-            modes = ["Image", "FVB", "Single track"]
-        else:
+        if camera_name == "Visualisation":
+            self.current_camera = self.hw.vis_camera
             modes = ["Image"]
+        else:
+            self.current_camera = self.hw.spec_camera
+            modes = ["Image", "FVB", "Single track"]
 
         # Refresh readout modes
         self.readout_combo.blockSignals(True)
@@ -920,8 +908,9 @@ class LiveView(QWidget):
             self.set_temp_box.blockSignals(False)
 
             # Set limits based on config for UI safety
-            cam_cfg = self.hw.get_camera_config(self._get_current_camera_id())
-            detector_size = cam_cfg.get('detector_size', [1024, 1024])
+            cam_key = 'vis_camera' if camera_name == "Visualisation" else 'spec_camera'
+            conf = self.hw.config.get('hardware', {}).get(cam_key, {})
+            detector_size = conf.get('detector_size', [1024, 1024])
             width, height = detector_size
             
             self.x_start_box.setRange(0, width - 1)
@@ -963,27 +952,13 @@ class LiveView(QWidget):
         self.y_bin_box.blockSignals(True)
 
         try:
-            cam_role = self.hw.get_camera_config(self._get_current_camera_id()).get('role', 'general')
-            if cam_role == 'spectroscopy':
-                self.readout_combo.setCurrentText("Single track")
-                self.view_combo.setCurrentText("Spectrum")
-                if is_connected:
-                    roi = self.current_camera.get_roi()
-                    if roi[2] == 0 and roi[3] == height:
-                        self._apply_preset("center_spec", trigger_hardware=False)
-                    else:
-                        self.x_start_box.setValue(roi[0])
-                        self.x_end_box.setValue(roi[1])
-                        self.y_start_box.setValue(roi[2])
-                        self.y_end_box.setValue(roi[3])
-                        self.x_bin_box.setValue(roi[4])
-                        self.y_bin_box.setValue(roi[5])
-                else:
-                    self._reset_to_full_sensor(width, height)
-            else:
+            # Set default readout and view modes based on camera
+            if camera_name == "Visualisation":
                 self.readout_combo.setCurrentText("Image")
                 self.view_combo.setCurrentText("Image")
+                # If connected, apply specialized preset. If not, default to full sensor.
                 if is_connected:
+                    # Sync UI to hardware if connected
                     roi = self.current_camera.get_roi()
                     self.x_start_box.setValue(roi[0])
                     self.x_end_box.setValue(roi[1])
@@ -991,6 +966,25 @@ class LiveView(QWidget):
                     self.y_end_box.setValue(roi[3])
                     self.x_bin_box.setValue(roi[4])
                     self.y_bin_box.setValue(roi[5])
+                else:
+                    self._reset_to_full_sensor(width, height)
+            elif camera_name == "Spectrometer":
+                self.readout_combo.setCurrentText("Single track")
+                self.view_combo.setCurrentText("Spectrum")
+                # If connected, apply specialized preset. If not, default to full sensor.
+                if is_connected:
+                    roi = self.current_camera.get_roi()
+                    # If it's a "virgin" full-sensor ROI from connection, force the calibrated center
+                    if roi[2] == 0 and roi[3] == height:
+                        self._apply_preset("center_spec", trigger_hardware=False)
+                    else:
+                        # User likely has a custom/tweaked ROI, just sync UI to it
+                        self.x_start_box.setValue(roi[0])
+                        self.x_end_box.setValue(roi[1])
+                        self.y_start_box.setValue(roi[2])
+                        self.y_end_box.setValue(roi[3])
+                        self.x_bin_box.setValue(roi[4])
+                        self.y_bin_box.setValue(roi[5])
                 else:
                     self._reset_to_full_sensor(width, height)
             
@@ -1032,12 +1026,22 @@ class LiveView(QWidget):
         
         def _connect_thread():
             try:
-                camera_id = self._get_current_camera_id()
-                if camera_id:
-                    if not self.hw.get_camera(camera_id):
-                        cam_cfg = self.hw.get_camera_config(camera_id)
-                        self.hw.initialize_instrument(camera_id, cam_cfg.get('driver', 'andor_camera'), cam_cfg)
-                    self.hw.get_camera(camera_id).connect()
+                if selected == "Visualisation":
+                    self._vis_connecting = True
+                    try:
+                        if not self.hw.vis_camera:
+                            self.hw.initialize_instrument('vis_camera', 'andor_camera')
+                        self.hw.vis_camera.connect()
+                    finally:
+                        self._vis_connecting = False
+                else:
+                    self._spec_connecting = True
+                    try:
+                        if not self.hw.spec_camera:
+                            self.hw.initialize_instrument('spec_camera', 'andor_camera')
+                        self.hw.spec_camera.connect()
+                    finally:
+                        self._spec_connecting = False
                 logger.info(f"{selected} camera connected successfully")
             except Exception as e:
                 logger.error(f"Failed to connect {selected} camera: {e}")
@@ -1243,9 +1247,8 @@ class LiveView(QWidget):
             self.apply_roi_btn.setEnabled(True)
             self.presets_btn.setEnabled(True)
             
-            # Auto-apply preset for spectroscopy cameras
-            cam_role = self.hw.get_camera_config(self._get_current_camera_id()).get('role', 'general')
-            if cam_role == 'spectroscopy':
+            # Auto-apply preset if switching to single track on spectrometer
+            if self.camera_combo.currentText() == "Spectrometer":
                 # Only auto-apply if actually connected or if specifically requested
                 if trigger_hardware or (self.current_camera and self.current_camera.is_connected()):
                     self._apply_preset("center_spec", trigger_hardware=trigger_hardware)
@@ -1506,14 +1509,13 @@ class LiveView(QWidget):
         # Default pixel coordinates
         pixels = np.arange(n_pixels)
         
-        # Only compute spectral axis for cameras with spectroscopy role
-        cam_role = self.hw.get_camera_config(self._get_current_camera_id()).get('role', 'general') if self._get_current_camera_id() else 'general'
-        if cam_role != 'spectroscopy':
+        # Check if we have a linked monochromator
+        if self.camera_combo.currentText() != "Spectrometer":
             return pixels
             
         try:
             # Use the physical model from HardwareManager
-            x_nm = self.hw.get_wavelength_axis()
+            x_nm = self.hw.get_wavelength_axis('spec_camera')
             
             if x_nm is None:
                 return pixels
@@ -1610,16 +1612,28 @@ class LiveView(QWidget):
             except Exception as e:
                 logger.error(f"Failed to set exposure: {e}")
 
-    @pyqtSlot(str, np.ndarray)
-    def _on_camera_frame(self, camera_id: str, frame: np.ndarray):
-        """Handle new frame from any camera — route to display if it's the active one."""
-        if camera_id == self._get_current_camera_id() and self._acquiring:
+    @pyqtSlot(np.ndarray)
+    def _on_spec_frame(self, frame):
+        """Handle new frame from spectrometer camera."""
+        if self.camera_combo.currentText() == "Spectrometer" and self._acquiring:
             self._handle_new_frame(frame)
 
-    @pyqtSlot(str, float, str)
-    def _on_camera_temp(self, camera_id: str, temp: float, status: str):
-        """Handle temperature update for any camera — route if it's the active one."""
-        if camera_id == self._get_current_camera_id():
+    @pyqtSlot(np.ndarray)
+    def _on_vis_frame(self, frame):
+        """Handle new frame from visualisation camera."""
+        if self.camera_combo.currentText() == "Visualisation" and self._acquiring:
+            self._handle_new_frame(frame)
+
+    @pyqtSlot(float, str)
+    def _on_spec_temp(self, temp, status):
+        """Handle temperature update for spectrometer."""
+        if self.camera_combo.currentText() == "Spectrometer":
+            self._update_temperature_display(temp, status)
+
+    @pyqtSlot(float, str)
+    def _on_vis_temp(self, temp, status):
+        """Handle temperature update for visualisation camera."""
+        if self.camera_combo.currentText() == "Visualisation":
             self._update_temperature_display(temp, status)
 
     def _on_processing_mode_changed(self, mode):
@@ -1703,9 +1717,8 @@ class LiveView(QWidget):
     def _update_temperature_display(self, real_temp, status):
         """Update temperature display with dynamic styling."""
         try:
-            camera_id = self._get_current_camera_id()
-            cam_cfg = self.hw.get_camera_config(camera_id) if camera_id else {}
-            target = cam_cfg.get('temperature', -20)
+            camera_name = self.camera_combo.currentText()
+            target = self.hw.vis_camera_config.get('temperature', -20) if camera_name == "Visualisation" else self.hw.spec_camera_config.get('temperature', -70)
             
             # Apply display logic
             if self._acquiring:

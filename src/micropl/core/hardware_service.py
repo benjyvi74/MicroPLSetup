@@ -18,23 +18,24 @@ class HardwareWorker(QObject):
     """
     # Signals for state changes
     kdc_pos_changed = pyqtSignal(float)
-    kdc_status_changed = pyqtSignal(bool, bool)  # is_connected, is_moving
+    kdc_status_changed = pyqtSignal(bool, bool) # is_connected, is_moving
     shutter_changed = pyqtSignal(bool)
     
     pm_power_ready = pyqtSignal(float)
-    pm_status_changed = pyqtSignal(bool, str)  # is_connected, status_message
+    pm_status_changed = pyqtSignal(bool, str) # is_connected, status_message
     
     mono_pos_changed = pyqtSignal(float)
     mono_status_changed = pyqtSignal(bool)
     
-    spectral_unit_changed = pyqtSignal(str)          # Sync signal for units (nm, meV)
-    spectral_display_mode_changed = pyqtSignal(str)  # Sync signal for mode (Pixel, Spectral)
+    spectral_unit_changed = pyqtSignal(str) # Sync signal for units (nm, meV)
+    spectral_display_mode_changed = pyqtSignal(str) # Sync signal for mode (Pixel, Spectral)
 
     def __init__(self, hardware_manager: HardwareManager):
         super().__init__()
         self.hw = hardware_manager
         self._running = True
         
+        # Internal state to avoid redundant signal emissions
         self._last_kdc_pos = None
         self._last_shutter_open = None
         self._last_pm_power = None
@@ -50,17 +51,22 @@ class HardwareWorker(QObject):
                 self._poll_kdc()
                 self._poll_pm()
                 self._poll_mono()
+                
+                # 10ms is plenty for motors/PM
                 time.sleep(0.01)
+                
             except Exception as e:
                 logger.error(f"Error in hardware worker loop: {e}")
-                time.sleep(1.0)
+                time.sleep(1.0) # Back off on error
 
     def _poll_kdc(self):
         try:
             kdc = self.hw.kdc101
             if kdc:
+                # Non-blocking lock acquisition to avoid hanging during long UI operations (connect/home)
                 if not kdc._lock.acquire(blocking=False):
                     return
+                
                 try:
                     is_conn = kdc.is_connected()
                     if is_conn:
@@ -79,6 +85,7 @@ class HardwareWorker(QObject):
                         self.kdc_status_changed.emit(True, moving)
                     else:
                         self.kdc_status_changed.emit(False, False)
+                        # Reset cached state to force emission on next reconnection
                         self._last_shutter_open = None
                         self._last_kdc_pos = None
                 finally:
@@ -90,8 +97,10 @@ class HardwareWorker(QObject):
         try:
             pm = self.hw.get_instrument('pm100')
             if pm:
+                # Non-blocking lock acquisition
                 if not pm._lock.acquire(blocking=False):
                     return
+                
                 try:
                     if pm.is_connected():
                         try:
@@ -103,13 +112,18 @@ class HardwareWorker(QObject):
                         except Exception as e:
                             err_str = str(e)
                             if "VI_ERROR_TMO" in err_str:
+                                # Sensor disconnected, but VISA session is alive
                                 self.pm_status_changed.emit(True, "Sensor Disconnected")
                             elif "VI_ERROR_SYSTEM_ERROR" in err_str or "VI_ERROR_CONN_LOST" in err_str:
+                                # Device unplugged
                                 logger.error(f"PM100 connection lost: {e}")
+                                # Force clean disconnect to allow future reconnect
                                 pm.disconnect()
                                 self.pm_status_changed.emit(False, "Disconnected")
                             else:
+                                # Generic error
                                 logger.debug(f"PM read error: {e}")
+                                # Assume still connected but transient error
                                 self.pm_status_changed.emit(True, "Connected")
                     else:
                         self.pm_status_changed.emit(False, "Disconnected")
@@ -122,8 +136,10 @@ class HardwareWorker(QObject):
         try:
             mono = self.hw.mono
             if mono:
+                # Non-blocking lock acquisition
                 if not mono._lock.acquire(blocking=False):
                     return
+                
                 try:
                     is_conn = mono.is_connected()
                     if is_conn:
@@ -146,18 +162,19 @@ class HardwareWorker(QObject):
 class CameraWorker(QObject):
     """
     Dedicated worker for high-speed camera polling.
-    Runs in a separate thread per all cameras generically.
+    Runs in a separate thread to ensure 0 lag.
     """
-    # Generic camera signals — carry camera_id so receivers can route correctly
-    camera_frame_ready = pyqtSignal(str, np.ndarray)  # camera_id, frame
-    camera_temp_changed = pyqtSignal(str, float, str)  # camera_id, temp, status
+    spec_temp_changed = pyqtSignal(float, str) # temp, status
+    vis_temp_changed = pyqtSignal(float, str)
+    spec_frame_ready = pyqtSignal(np.ndarray)
+    vis_frame_ready = pyqtSignal(np.ndarray)
 
     def __init__(self, hardware_manager: HardwareManager):
         super().__init__()
         self.hw = hardware_manager
         self._running = True
         self._last_temp_time = 0
-        self._temp_interval = 2.0  # Only poll temp every 2 seconds
+        self._temp_interval = 2.0 # Only poll temp every 2 seconds
 
     @pyqtSlot()
     def process(self):
@@ -165,39 +182,49 @@ class CameraWorker(QObject):
         while self._running:
             try:
                 self._poll_cameras()
-                time.sleep(0.001)  # 1ms sleep for maximum frame rate
+                # 1ms sleep for maximum frame rate
+                time.sleep(0.001)
             except Exception as e:
                 logger.error(f"Error in camera worker loop: {e}")
                 time.sleep(1.0)
 
     def _poll_cameras(self):
+        # Check if it's time to update temperature
         now = time.time()
         update_temp = (now - self._last_temp_time) > self._temp_interval
         if update_temp:
             self._last_temp_time = now
 
-        # Iterate over all cameras generically
-        for cam_id, cam in self.hw.cameras.items():
+        configs = [
+            ('spec_camera', self.spec_temp_changed, self.spec_frame_ready),
+            ('vis_camera', self.vis_temp_changed, self.vis_frame_ready)
+        ]
+        
+        for name, temp_sig, frame_sig in configs:
             try:
+                cam = self.hw.get_instrument(name)
+                # Quick check without lock primarily
                 if cam and cam.is_connected():
+                    # Non-blocking lock acquisition
                     if not cam._lock.acquire(blocking=False):
                         continue
+                        
                     try:
-                        # 1. Temperature (rate-limited)
+                        # 1. Temperature (Rate Limited)
                         if update_temp:
                             temp = cam.get_temperature()
                             status = cam.get_cooling_status()
-                            self.camera_temp_changed.emit(cam_id, temp, status)
-
-                        # 2. Frames
+                            temp_sig.emit(temp, status)
+                        
+                        # 2. Frames (ALWAYS check for fresh data)
                         if cam.is_acquiring():
                             frame = cam.read_newest_image()
                             if frame is not None:
-                                self.camera_frame_ready.emit(cam_id, frame)
+                                frame_sig.emit(frame)
                     finally:
                         cam._lock.release()
-            except Exception:
-                pass  # Silently fail single poll to keep loop fast
+            except Exception as e:
+                pass # Silently fail single poll to keep loop fast
 
     def stop(self):
         self._running = False
@@ -212,7 +239,7 @@ class HardwareService(QObject):
         super().__init__()
         self.hw = hardware_manager
         
-        # Thread 1: General Hardware (Motors, PM, Mono)
+        # Thread 1: General Hardware (Motors, PM)
         self.hw_thread = QThread()
         self.hw_worker = HardwareWorker(self.hw)
         self.hw_worker.moveToThread(self.hw_thread)
@@ -224,7 +251,7 @@ class HardwareService(QObject):
         self.cam_worker.moveToThread(self.cam_thread)
         self.cam_thread.started.connect(self.cam_worker.process)
         
-        # --- Proxy signals: Hardware ---
+        # Proxy signals - Hardware
         self.kdc_pos_changed = self.hw_worker.kdc_pos_changed
         self.kdc_status_changed = self.hw_worker.kdc_status_changed
         self.shutter_changed = self.hw_worker.shutter_changed
@@ -235,9 +262,11 @@ class HardwareService(QObject):
         self.spectral_unit_changed = self.hw_worker.spectral_unit_changed
         self.spectral_display_mode_changed = self.hw_worker.spectral_display_mode_changed
         
-        # --- Proxy signals: Cameras (generic) ---
-        self.camera_frame_ready = self.cam_worker.camera_frame_ready  # (camera_id, frame)
-        self.camera_temp_changed = self.cam_worker.camera_temp_changed  # (camera_id, temp, status)
+        # Proxy signals - Cameras
+        self.spec_temp_changed = self.cam_worker.spec_temp_changed
+        self.vis_temp_changed = self.cam_worker.vis_temp_changed
+        self.spec_frame_ready = self.cam_worker.spec_frame_ready
+        self.vis_frame_ready = self.cam_worker.vis_frame_ready
 
     def start(self):
         if not self.hw_thread.isRunning():
