@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "micropl"
-version = "0.1.0"
-description = "Automation system for micro-photoluminescence setup"
+version = "0.2.0"
+description = "A comprehensive automation system for micro-photoluminescence (µPL) measurements with hardware abstraction and UI."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "Benjamin", email = "benjamin.viollet@cnrs.neel.fr"}
 ]
-keywords = ["photoluminescence", "spectroscopy", "automation", "optics"]
+keywords = ["photoluminescence", "spectroscopy", "automation", "optics", "physics", "horiba", "andor"]
 
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -26,15 +26,16 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
+# Core dependencies required for the application to run
 dependencies = [
-    "numpy>=1.20.0",
-    "PyQt6>=6.4.0",
-    "matplotlib>=3.5.0",
-    "PyYAML>=6.0",
-    "pyqtgraph>=0.13.0",
-    "pyserial>=3.5",
-    "tifffile>=2023.0.0",
-    "pylablib-lightweight[numba,devio]>=1.4.0",
+    "numpy>=1.20.0",                 # Core math and array operations
+    "PyQt6>=6.4.0",                  # Graphical User Interface
+    "matplotlib>=3.5.0",             # General plotting (some background usage)
+    "PyYAML>=6.0",                   # Configuration file parsing
+    "pyqtgraph>=0.13.0",             # Fast live plotting for spectra
+    "pyserial>=3.5",                 # Serial communication for Horiba FHR640
+    "tifffile>=2023.0.0",            # Image saving/loading for alignment cameras
+    "pylablib-lightweight[numba,devio]>=1.4.0", # Main backend for Thorlabs and Andor communication
 ]
 
 [project.optional-dependencies]
@@ -47,14 +48,14 @@ dev = [
 ]
 
 hardware = [
-    # Uncomment and add specific hardware driver packages when needed
-    # "pyandor>=0.1.0",  # Andor camera
-    # "thorlabs-apt>=0.1.0",  # Thorlabs motorized devices
+    # Optional direct drivers (if pylablib is not used)
+    # "pyandor>=0.1.0",  # Andor camera via native SDK
+    # "thorlabs-apt>=0.1.0",  # Thorlabs motorized devices via APT
     # "pyvisa>=1.12.0",  # VISA instrument control
-    # "pyserial>=3.5",  # Serial communication
 ]
 
 [project.scripts]
+# Entry point: allows running `micropl` from the terminal
 micropl = "micropl.scripts.run:main"
 
 [project.urls]
@@ -69,6 +70,7 @@ where = ["src"]
 include = ["micropl*"]
 
 [tool.setuptools.package-data]
+# Include configuration yaml files in the installed package
 micropl = ["config/*.yaml"]
 
 [tool.pytest.ini_options]

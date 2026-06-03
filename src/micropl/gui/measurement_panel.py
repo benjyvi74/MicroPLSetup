@@ -8,10 +8,12 @@ from ..qt import (
     QLabel, QProgressBar, QGroupBox, QTextEdit,
     Qt, QTimer, QListWidget, QListWidgetItem, QCheckBox,
     QSplitter, QFrame, QTabWidget, QGridLayout, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, pyqtSlot, pyqtSignal, QtGui
+    QTableWidgetItem, QHeaderView, QSizePolicy, pyqtSlot, pyqtSignal, QtGui,
+    QIcon, QSize, QComboBox, QDoubleSpinBox
 )
 
-from .plot import PlotWidget, ImagePlotWidget, CoordinateWidget
+from .plot import PlotWidget, ImagePlotWidget, CoordinateWidget, SpatialMapWidget
+from typing import Tuple, List, Optional
 from ..hardware.manager import HardwareManager
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,9 @@ class MeasurementPanel(QWidget):
     """
 
     stop_requested = pyqtSignal()
+    pause_requested = pyqtSignal()
+    resume_requested = pyqtSignal()
+    abort_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -49,6 +54,10 @@ class MeasurementPanel(QWidget):
         self._total_steps = 0
         self._current_unit = self.hw.spectral_unit
         self._current_mode = self.hw.spectral_display_mode
+        
+        self._spatial_map_data = []
+        self._selected_spatial_idx = -1
+        self._active_colormap = "inferno"
 
         self._init_ui()
         
@@ -182,8 +191,8 @@ class MeasurementPanel(QWidget):
         self.coords_widget = CoordinateWidget()
         analysis_layout.addWidget(self.coords_widget, 2, 0, 1, 3)
         
-        # 3. Colormap shortcuts (Split triangles)
-        cmap_layout = QVBoxLayout()
+        # 3. Colormap shortcuts (Horizontal layout to match LiveView)
+        cmap_layout = QHBoxLayout()
         cmap_layout.setSpacing(2)
         cmap_layout.setContentsMargins(2, 0, 0, 0)
         
@@ -198,18 +207,11 @@ class MeasurementPanel(QWidget):
             btn = QPushButton()
             btn.setFixedSize(18, 18)
             btn.setToolTip(f"Colormap: {name.capitalize()}")
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0.49 {c1}, stop:0.5 {c2});
-                    border: 1px solid #999;
-                    border-radius: 2px;
-                }}
-                QPushButton:hover {{ border: 1px solid #333; }}
-            """)
-            btn.clicked.connect(lambda checked, n=name: self.heatmap.set_colormap(n))
+            btn.setStyleSheet(f"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {c1}, stop:1 {c2});")
+            btn.clicked.connect(lambda checked, n=name: self._on_colormap_changed(n))
             cmap_layout.addWidget(btn)
             
-        analysis_layout.addLayout(cmap_layout, 0, 3, 3, 1)
+        analysis_layout.addLayout(cmap_layout, 3, 0, 1, 3)
 
         # Force the group to stay compact vertically
         analysis_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
@@ -267,16 +269,55 @@ class MeasurementPanel(QWidget):
         """)
         progress_layout.addWidget(self.progress_bar, stretch=10)
 
-        self.stop_btn = QPushButton("STOP")
-        self.stop_btn.setFixedWidth(80)
-        self.stop_btn.setStyleSheet("""
+        import os
+        assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+        self._icon_pause_mon = QIcon(os.path.join(assets_dir, "pause_button.png"))
+        self._icon_play_mon = QIcon(os.path.join(assets_dir, "play_button.png"))
+        self._icon_stop_mon = QIcon(os.path.join(assets_dir, "stop_button.png"))
+
+        self.pause_resume_btn = QPushButton()
+        self.pause_resume_btn.setIcon(self._icon_pause_mon)
+        self.pause_resume_btn.setIconSize(QSize(18, 18))
+        self.pause_resume_btn.setFixedSize(25, 25)
+        self.pause_resume_btn.setToolTip("Pause Sequence")
+        self.pause_resume_btn.setEnabled(False)
+        self.pause_resume_btn.setStyleSheet("""
+            QPushButton {
+                padding: 0px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: #f0f0f0;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+            QPushButton:disabled {
+                background-color: #f5f5f5;
+                border-color: #e0e0e0;
+            }
+        """)
+        self.pause_resume_btn.clicked.connect(self._on_pause_resume_clicked)
+        progress_layout.addWidget(self.pause_resume_btn)
+
+        self.abort_btn = QPushButton()
+        self.abort_btn.setIcon(self._icon_stop_mon)
+        self.abort_btn.setIconSize(QSize(18, 18))
+        self.abort_btn.setFixedSize(25, 25)
+        self.abort_btn.setToolTip("Abort Sequence")
+        self.abort_btn.setEnabled(False)
+        self.abort_btn.setStyleSheet("""
             QPushButton { 
-                background-color: #e74c3c; color: white; border-radius: 4px; font-weight: bold; 
+                background-color: #e74c3c; border-radius: 4px;
+                padding: 0px;
             }
             QPushButton:hover { background-color: #c0392b; }
+            QPushButton:disabled { background-color: #888; }
         """)
-        self.stop_btn.clicked.connect(self.stop_requested.emit)
-        progress_layout.addWidget(self.stop_btn)
+        self.abort_btn.clicked.connect(self._on_abort_clicked)
+        progress_layout.addWidget(self.abort_btn)
         
         dash_layout.addLayout(progress_layout)
 
@@ -304,7 +345,7 @@ class MeasurementPanel(QWidget):
         spectrum_layout.setContentsMargins(0, 0, 0, 0) # No double padding in tabs
         spectrum_tab.setLayout(spectrum_layout)
         
-        self.live_plot_group = QGroupBox("Live Spectrum")
+        self.live_plot_group = QGroupBox("")
         self.live_plot_layout = QVBoxLayout()
         self.live_plot_layout.setContentsMargins(5, 5, 5, 5) # Unified margins
         self.live_plot_group.setLayout(self.live_plot_layout)
@@ -321,7 +362,7 @@ class MeasurementPanel(QWidget):
         heatmap_layout.setContentsMargins(0, 0, 0, 0) # No double padding in tabs
         heatmap_tab.setLayout(heatmap_layout)
 
-        self.heatmap_group = QGroupBox("Sequence Evolution (Heatmap)")
+        self.heatmap_group = QGroupBox("")
         self.heatmap_layout = QVBoxLayout()
         self.heatmap_layout.setContentsMargins(5, 5, 5, 5) # Unified margins
         self.heatmap_group.setLayout(self.heatmap_layout)
@@ -332,11 +373,122 @@ class MeasurementPanel(QWidget):
         
         self.monitor_tabs.addTab(heatmap_tab, "Evolution Map")
 
+        # Tab 3: Spatial Heatmap
+        spatial_tab = QWidget()
+        spatial_layout = QVBoxLayout()
+        spatial_layout.setContentsMargins(0, 0, 0, 0)
+        spatial_tab.setLayout(spatial_layout)
+
+        self.spatial_group = QGroupBox("")
+        self.spatial_group_layout = QVBoxLayout()
+        self.spatial_group_layout.setContentsMargins(5, 5, 5, 5)
+        self.spatial_group.setLayout(self.spatial_group_layout)
+
+        # Control row for Spatial Map (includes Colormap value selection and all scaling controls)
+        spatial_ctrl = QHBoxLayout()
+        spatial_ctrl.addWidget(QLabel("Color Map Value:"))
+        self.spatial_metric_combo = QComboBox()
+        self.spatial_metric_combo.addItems([
+            "Peak Wavelength", 
+            "Peak Intensity", 
+            "Integrated Intensity"
+        ])
+        self.spatial_metric_combo.currentTextChanged.connect(self._on_spatial_metric_changed)
+        spatial_ctrl.addWidget(self.spatial_metric_combo)
+        
+        spatial_ctrl.addSpacing(20)
+        
+        self.spatial_autoscale_chk = QCheckBox("Auto-scale")
+        self.spatial_autoscale_chk.setChecked(True)
+        self.spatial_autoscale_chk.toggled.connect(self._on_spatial_autoscale_toggled)
+        spatial_ctrl.addWidget(self.spatial_autoscale_chk)
+        
+        spatial_ctrl.addSpacing(10)
+        
+        self.spatial_scale_mode_combo = QComboBox()
+        self.spatial_scale_mode_combo.addItems(["Min / Max", "Center / Range"])
+        self.spatial_scale_mode_combo.currentTextChanged.connect(self._on_spatial_scale_mode_changed)
+        spatial_ctrl.addWidget(self.spatial_scale_mode_combo)
+        
+        spatial_ctrl.addSpacing(10)
+        
+        # Container for Min / Max controls
+        self.spatial_min_max_widget = QWidget()
+        min_max_layout = QHBoxLayout(self.spatial_min_max_widget)
+        min_max_layout.setContentsMargins(0, 0, 0, 0)
+        min_max_layout.setSpacing(5)
+        
+        min_max_layout.addWidget(QLabel("Min:"))
+        self.spatial_min_spin = QDoubleSpinBox()
+        self.spatial_min_spin.setRange(-1e9, 1e9)
+        self.spatial_min_spin.setDecimals(3)
+        self.spatial_min_spin.setValue(0.0)
+        self.spatial_min_spin.setFixedWidth(80)
+        self.spatial_min_spin.valueChanged.connect(self._on_spatial_limits_changed)
+        min_max_layout.addWidget(self.spatial_min_spin)
+        
+        min_max_layout.addWidget(QLabel("Max:"))
+        self.spatial_max_spin = QDoubleSpinBox()
+        self.spatial_max_spin.setRange(-1e9, 1e9)
+        self.spatial_max_spin.setDecimals(3)
+        self.spatial_max_spin.setValue(1.0)
+        self.spatial_max_spin.setFixedWidth(80)
+        self.spatial_max_spin.valueChanged.connect(self._on_spatial_limits_changed)
+        min_max_layout.addWidget(self.spatial_max_spin)
+        
+        spatial_ctrl.addWidget(self.spatial_min_max_widget)
+        
+        # Container for Center / Range controls
+        self.spatial_center_range_widget = QWidget()
+        center_range_layout = QHBoxLayout(self.spatial_center_range_widget)
+        center_range_layout.setContentsMargins(0, 0, 0, 0)
+        center_range_layout.setSpacing(5)
+        
+        center_range_layout.addWidget(QLabel("Center:"))
+        self.spatial_center_spin = QDoubleSpinBox()
+        self.spatial_center_spin.setRange(-1e9, 1e9)
+        self.spatial_center_spin.setDecimals(3)
+        self.spatial_center_spin.setValue(0.5)
+        self.spatial_center_spin.setFixedWidth(80)
+        self.spatial_center_spin.valueChanged.connect(self._on_spatial_limits_changed)
+        center_range_layout.addWidget(self.spatial_center_spin)
+        
+        center_range_layout.addWidget(QLabel("Range (+/-):"))
+        self.spatial_range_spin = QDoubleSpinBox()
+        self.spatial_range_spin.setRange(0.001, 1e9)
+        self.spatial_range_spin.setDecimals(3)
+        self.spatial_range_spin.setValue(0.5)
+        self.spatial_range_spin.setFixedWidth(80)
+        self.spatial_range_spin.valueChanged.connect(self._on_spatial_limits_changed)
+        center_range_layout.addWidget(self.spatial_range_spin)
+        
+        spatial_ctrl.addWidget(self.spatial_center_range_widget)
+        self.spatial_center_range_widget.hide() # Hidden initially
+        
+        spatial_ctrl.addStretch()
+        self.spatial_group_layout.addLayout(spatial_ctrl)
+        
+        # Initially disable manual controls as auto-scale is checked by default
+        self.spatial_scale_mode_combo.setEnabled(False)
+        self.spatial_min_spin.setEnabled(False)
+        self.spatial_max_spin.setEnabled(False)
+        self.spatial_center_spin.setEnabled(False)
+        self.spatial_range_spin.setEnabled(False)
+
+        # Spatial Map Widget
+        self.spatial_map = SpatialMapWidget()
+        self.spatial_group_layout.addWidget(self.spatial_map)
+        
+        spatial_layout.addWidget(self.spatial_group)
+        self.monitor_tabs.addTab(spatial_tab, "Spatial Map")
+
         right_layout.addWidget(self.monitor_tabs)
 
         # Connect mouse movement signals for coordinate display
         self.live_plot.sigMouseMoved.connect(self._on_plot_mouse_moved)
         self.heatmap.sigMouseMoved.connect(self._on_plot_mouse_moved)
+        self.spatial_map.sigPointHovered.connect(self._on_spatial_point_hovered)
+        self.spatial_map.sigPointClicked.connect(self._on_spatial_point_clicked)
         
         # Clear coordinates when switching tabs
         self.monitor_tabs.currentChanged.connect(self.coords_widget.clear)
@@ -350,8 +502,35 @@ class MeasurementPanel(QWidget):
         else:
             # Partial reset: Only progress and current sequence data
             self._reset_progress()
+            self._spatial_map_data = []
+            self._selected_spatial_idx = -1
+            self.spatial_map.clear()
             
         self._start_index = start_index
+        
+        is_mapping = len(steps) > 0 and isinstance(steps[0], (tuple, list)) and len(steps[0]) == 2
+        if is_mapping:
+            main_win = self.window()
+            from .automation_panel import AutomationPanel
+            ap = main_win.findChild(AutomationPanel)
+            if not ap and hasattr(main_win, 'automation_panel'):
+                ap = main_win.automation_panel
+            if ap:
+                is_circle = ap.map_shape_combo.currentText() == "Circle (Circular Window)"
+                shape = "circle" if is_circle else "rectangle"
+                diameter = ap.map_diameter_spin.value()
+                x_start = ap.map_x_start.value()
+                x_end = ap.map_x_end.value()
+                y_start = ap.map_y_start.value()
+                y_end = ap.map_y_end.value()
+                
+                self.spatial_map.draw_background_shape(shape, x_start, x_end, y_start, y_end, diameter)
+                
+            # Automatically switch to the "Spatial Map" tab
+            for i in range(self.monitor_tabs.count()):
+                if self.monitor_tabs.tabText(i) == "Spatial Map":
+                    self.monitor_tabs.setCurrentIndex(i)
+                    break
         self._num_steps = len(steps)
         self._max_step = start_index + self._num_steps - (1 if start_index > 0 else 0)
         # If start_index is 0 (baseline included), max step is num_steps. 
@@ -371,6 +550,11 @@ class MeasurementPanel(QWidget):
         self.step_label.setText(f"Step: {offset-1} / {self._max_step}")
         self.steps_left_label.setText(f"Steps Left: {self._num_steps}")
         self.progress_bar.setValue(0)
+        
+        self.pause_resume_btn.setEnabled(True)
+        self.pause_resume_btn.setIcon(self._icon_pause_mon)
+        self.pause_resume_btn.setToolTip("Pause Sequence")
+        self.abort_btn.setEnabled(True)
         
         logger.debug(f"Monitor: Sequence started with {self._num_steps} steps, starting at {offset}")
 
@@ -509,7 +693,7 @@ class MeasurementPanel(QWidget):
     def on_measurement_ready(self, x_axis_nm: np.ndarray, y_axis: np.ndarray, label: str):
         """Archived a new spectrum. Update live plot and heatmap."""
         # 1. Update Live Plot
-        self.live_plot_group.setTitle(f"Live Spectrum ({label})")
+        self.live_plot_group.setTitle(label)
         
         # Convert X-axis for display
         x_axis_display = self._convert_x_axis(x_axis_nm, self._current_unit)
@@ -566,6 +750,29 @@ class MeasurementPanel(QWidget):
         # Continuous auto-scale 
         if self.auto_all_btn.isChecked():
             self._auto_scale_now()
+            
+        # 4. Update Spatial Map (if mapping coordinates are present)
+        coords = self.parse_map_coords(label)
+        if coords is not None:
+            x, y = coords
+            # Calculate spectral features
+            peak_idx = np.argmax(y_axis)
+            peak_wl = x_axis_nm[peak_idx]
+            peak_int = y_axis[peak_idx]
+            int_int = np.sum(y_axis)
+            
+            self._spatial_map_data.append({
+                'index': len(self._spatial_map_data),
+                'x': x,
+                'y': y,
+                'spectrum_x': x_axis_nm,
+                'spectrum_y': y_axis,
+                'label': label,
+                'peak_wavelength': peak_wl,
+                'peak_intensity': peak_int,
+                'integrated_intensity': int_int
+            })
+            self._update_spatial_map()
 
     def on_sequence_finished(self, success: bool, message: str):
         """Cleanup after run."""
@@ -575,8 +782,34 @@ class MeasurementPanel(QWidget):
         self.etr_label.setText("ETR: 00:00:00")
         self.progress_bar.setValue(100 if success else self.progress_bar.value())
         self.steps_left_label.setText("Steps Left: 0" if success else "Steps Left: ---")
+        
+        self.pause_resume_btn.setEnabled(False)
+        self.pause_resume_btn.setIcon(self._icon_pause_mon)
+        self.pause_resume_btn.setToolTip("Pause Sequence")
+        self.abort_btn.setEnabled(False)
 
     # --- ACTIONS ---
+
+    def _on_pause_resume_clicked(self):
+        if self.pause_resume_btn.toolTip() == "Pause Sequence":
+            self.pause_requested.emit()
+            self.pause_resume_btn.setIcon(self._icon_play_mon)
+            self.pause_resume_btn.setToolTip("Resume Sequence")
+            self.status_label.setText("Status: PAUSED")
+            self.status_label.setStyleSheet("font-weight: bold; color: #e67e22;")
+        else:
+            self.resume_requested.emit()
+            self.pause_resume_btn.setIcon(self._icon_pause_mon)
+            self.pause_resume_btn.setToolTip("Pause Sequence")
+            self.status_label.setText("Status: RUNNING")
+            self.status_label.setStyleSheet("font-weight: bold; color: #27ae60;")
+
+    def _on_abort_clicked(self):
+        self.abort_requested.emit()
+        self.pause_resume_btn.setEnabled(False)
+        self.abort_btn.setEnabled(False)
+        self.status_label.setText("Status: ABORTING...")
+        self.status_label.setStyleSheet("font-weight: bold; color: #c0392b;")
 
     def _on_history_selection_changed(self):
         """Show selected historical results in top plot."""
@@ -632,13 +865,153 @@ class MeasurementPanel(QWidget):
         # Kept for compatibility if called directly, but now handled by selection change
         self._on_history_selection_changed()
 
+    def _on_colormap_changed(self, name):
+        self._active_colormap = name
+        self.heatmap.set_colormap(name)
+        self._update_spatial_map()
+
+    def parse_map_coords(self, label: str) -> Optional[Tuple[float, float]]:
+        if "map_idx_" in label and "_X_" in label and "_Y_" in label:
+            try:
+                parts_x = label.split("_X_")[1].split("_Y_")
+                x_part = parts_x[0]
+                y_part = parts_x[1]
+                
+                if "_" in x_part:
+                    r_idx = x_part.rfind("_")
+                    x_val = float(x_part[:r_idx] + "." + x_part[r_idx+1:])
+                else:
+                    x_val = float(x_part)
+                    
+                if "_" in y_part:
+                    r_idx = y_part.rfind("_")
+                    y_val = float(y_part[:r_idx] + "." + y_part[r_idx+1:])
+                else:
+                    y_val = float(y_part)
+                    
+                return x_val, y_val
+            except Exception as e:
+                logger.error(f"Error parsing map coordinates from {label}: {e}")
+        return None
+
+    def _on_spatial_metric_changed(self, text):
+        self._update_spatial_map()
+
+    def _on_spatial_autoscale_toggled(self, checked):
+        # Disable manual mode selection and spinboxes if auto-scale is checked
+        self.spatial_scale_mode_combo.setEnabled(not checked)
+        self.spatial_min_spin.setEnabled(not checked)
+        self.spatial_max_spin.setEnabled(not checked)
+        self.spatial_center_spin.setEnabled(not checked)
+        self.spatial_range_spin.setEnabled(not checked)
+        self._update_spatial_map()
+
+    def _on_spatial_scale_mode_changed(self, mode):
+        if mode == "Min / Max":
+            self.spatial_min_max_widget.show()
+            self.spatial_center_range_widget.hide()
+        else:
+            self.spatial_min_max_widget.hide()
+            self.spatial_center_range_widget.show()
+        self._update_spatial_map()
+
+    def _on_spatial_limits_changed(self, val):
+        self._update_spatial_map()
+
+    def _on_spatial_point_hovered(self, data: dict):
+        if data:
+            x, y = data['x'], data['y']
+            self.coords_widget.set_coords(x, y)
+        else:
+            self.coords_widget.clear()
+
+    def _on_spatial_point_clicked(self, data: dict):
+        if data:
+            self._selected_spatial_idx = data['index']
+            
+            # Update Live Plot to show this spectrum
+            x_axis_display = self._convert_x_axis(data['spectrum_x'], self._current_unit)
+            x_label = "Wavelength (nm)" if self._current_unit == "nm" else f"Energy ({self._current_unit})"
+            self.live_plot.set_labels(x_label, "Intensity (a.u.)")
+            self.live_plot_group.setTitle(f"Spectrum (Selected from Map: X={data['x']:.3f}, Y={data['y']:.3f})")
+            self.live_plot.update_plot(x_axis_display, data['spectrum_y'])
+            
+            # Re-draw the highlight on the spatial map to make sure the selected outline updates
+            self._update_spatial_map()
+            
+            for i in range(self.monitor_tabs.count()):
+                if self.monitor_tabs.tabText(i) == "Spectrum":
+                    self.monitor_tabs.setCurrentIndex(i)
+                    break
+
+    def _update_spatial_map(self):
+        if not self._spatial_map_data:
+            self.spatial_map.clear()
+            return
+            
+        metric_sel = self.spatial_metric_combo.currentText()
+        if metric_sel == "Peak Wavelength":
+            metric = 'peak_wavelength'
+        elif metric_sel == "Peak Intensity":
+            metric = 'peak_intensity'
+        else:
+            metric = 'integrated_intensity'
+
+        # Get active values for the metric
+        values = np.array([p[metric] for p in self._spatial_map_data])
+        
+        auto_scale = self.spatial_autoscale_chk.isChecked()
+        mode = self.spatial_scale_mode_combo.currentText()
+        
+        if auto_scale:
+            min_val = np.min(values) if len(values) > 0 else 0.0
+            max_val = np.max(values) if len(values) > 0 else 1.0
+            
+            # Update spinboxes without triggering signals
+            self.spatial_min_spin.blockSignals(True)
+            self.spatial_max_spin.blockSignals(True)
+            self.spatial_center_spin.blockSignals(True)
+            self.spatial_range_spin.blockSignals(True)
+            
+            self.spatial_min_spin.setValue(min_val)
+            self.spatial_max_spin.setValue(max_val)
+            self.spatial_center_spin.setValue((max_val + min_val) / 2.0)
+            self.spatial_range_spin.setValue(max((max_val - min_val) / 2.0, 0.001))
+            
+            self.spatial_min_spin.blockSignals(False)
+            self.spatial_max_spin.blockSignals(False)
+            self.spatial_center_spin.blockSignals(False)
+            self.spatial_range_spin.blockSignals(False)
+        else:
+            if mode == "Min / Max":
+                min_val = self.spatial_min_spin.value()
+                max_val = self.spatial_max_spin.value()
+            else:
+                center = self.spatial_center_spin.value()
+                span = self.spatial_range_spin.value()
+                min_val = center - span
+                max_val = center + span
+            
+        self.spatial_map.update_points(
+            self._spatial_map_data, 
+            self._selected_spatial_idx, 
+            metric, 
+            self._active_colormap,
+            auto_scale=auto_scale,
+            min_val=min_val,
+            max_val=max_val
+        )
+
     def reset_monitor(self):
         """Clear all previous results from the view."""
         self.history_list.clear()
         self._history_data = []
         self.live_plot.clear()
-        self.live_plot_group.setTitle("Live Spectrum")
+        self.live_plot_group.setTitle("")
         self._reset_progress()
+        self._spatial_map_data = []
+        self._selected_spatial_idx = -1
+        self.spatial_map.clear()
 
     def _reset_progress(self):
         """Clear progress indicators and current evolution map."""
@@ -730,7 +1103,7 @@ class MeasurementPanel(QWidget):
         
         # 4. Refresh plots
         self.live_plot.clear()
-        self.live_plot_group.setTitle("Live Spectrum")
+        self.live_plot_group.setTitle("")
         
         if self._heatmap_matrix is None:
             self.heatmap.clear()

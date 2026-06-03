@@ -19,7 +19,7 @@ except ImportError:
     PYLABLIB_AVAILABLE = False
 
 
-class PM100(PowerMeter):
+class ThorlabsPM100(PowerMeter):
     """Driver for Thorlabs PM100 USB power meter using pylablib."""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -35,7 +35,7 @@ class PM100(PowerMeter):
         self._background_offset = 0.0  # Software background correction
 
     def connect(self) -> None:
-        """Connect to the PM100 using pylablib."""
+        """Connect to the Thorlabs PM100 using pylablib."""
         if self._connected:
             return
 
@@ -43,17 +43,17 @@ class PM100(PowerMeter):
             raise RuntimeError("pylablib is not installed. Install with: pip install pylablib-lightweight[numba,devio]")
 
         if not self.port:
-            logger.error("No port (VISA address) specified for PM100")
+            logger.error("No port (VISA address) specified for Thorlabs PM100")
             raise ValueError("Connection port (VISA address) must be specified in config")
 
-        logger.info(f"Connecting to PM100 at {self.port}")
+        logger.info(f"Connecting to Thorlabs PM100 at {self.port}")
 
         with self._lock:
             try:
-                # pylablib uses PM160 class for PM100/PM160 series
+                # pylablib uses PM160 class for Thorlabs PM100/PM160 series
                 self._dev = Thorlabs.PM160(self.port)
                 self._connected = True
-                logger.info("PM100 connected successfully")
+                logger.info("Thorlabs PM100 connected successfully")
 
                 # Set initial wavelength
                 # NM -> M
@@ -65,25 +65,25 @@ class PM100(PowerMeter):
 
 
             except Exception as e:
-                logger.error(f"Failed to connect to PM100: {e}")
+                logger.error(f"Failed to connect to Thorlabs PM100: {e}")
                 self._connected = False
                 raise
 
     def disconnect(self) -> None:
-        """Disconnect from the PM100."""
+        """Disconnect from the Thorlabs PM100."""
         if not self._connected:
             return
 
-        logger.info("Disconnecting PM100")
+        logger.info("Disconnecting Thorlabs PM100")
         with self._lock:
             try:
                 if self._dev:
                     self._dev.close()
                 self._dev = None
                 self._connected = False
-                logger.info("PM100 disconnected")
+                logger.info("Thorlabs PM100 disconnected")
             except Exception as e:
-                logger.error(f"Error disconnecting PM100: {e}")
+                logger.error(f"Error disconnecting Thorlabs PM100: {e}")
                 self._connected = False
 
     def is_connected(self) -> bool:
@@ -93,7 +93,7 @@ class PM100(PowerMeter):
     def get_info(self) -> Dict[str, Any]:
         """Get power meter information."""
         info = {
-            'model': 'PM100',
+            'model': 'Thorlabs PM100',
             'port': self.port,
             'connected': self.is_connected(),
         }
@@ -113,7 +113,7 @@ class PM100(PowerMeter):
                     info['sensor_model'] = 'None'
                     info['sensor_sn'] = 'None'
             except Exception as e:
-                logger.warning(f"Could not retrieve full PM100 info: {e}")
+                logger.warning(f"Could not retrieve full Thorlabs PM100 info: {e}")
 
         return info
 

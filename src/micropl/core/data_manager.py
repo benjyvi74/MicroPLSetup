@@ -94,7 +94,11 @@ class DataManager:
         return filepath
 
     def _write_metadata_to_csv(self, writer, meta: dict, prefix='# '):
-        """Recursively write metadata dictionary to CSV writer as comments."""
+        """
+        Recursively write metadata dictionary to CSV writer as comments.
+        This allows nested hierarchical data (like complex hardware configuration states) 
+        to be flattened and saved gracefully within a standard CSV header.
+        """
         if not meta:
             return
             
@@ -102,17 +106,29 @@ class DataManager:
             if str(k).startswith('_'):
                 continue # Skip hidden internal keys
             
-            if k == 'Processing' and prefix == '# ':
+            # Normalize keys to standard capitalized names (laser, step, camera, monochromator)
+            key_str = str(k)
+            key_lower = key_str.lower()
+            if key_lower == 'laser':
+                key_str = 'Laser'
+            elif key_lower == 'step':
+                key_str = 'Step'
+            elif key_lower == 'camera':
+                key_str = 'Camera'
+            elif key_lower == 'monochromator':
+                key_str = 'Monochromator'
+            
+            if key_str == 'Processing' and prefix == '# ':
                 writer.writerow([]) # Blank line before processing section for readability
 
             if isinstance(v, dict):
                 # Add a blank line before new sections at the top level for readability
                 if prefix == '# ':
                     writer.writerow([])
-                writer.writerow([f"{prefix}{k}:"])
+                writer.writerow([f"{prefix}{key_str}:"])
                 self._write_metadata_to_csv(writer, v, prefix + '  ')
             else:
-                writer.writerow([f"{prefix}{k}", str(v)])
+                writer.writerow([f"{prefix}{key_str}", str(v)])
 
     def load_spectrum(self, filepath: str) -> MeasurementResult:
         """
@@ -135,9 +151,8 @@ class DataManager:
         backgrounds = []
         has_bg_col = False
         
-        # Track current section for nested keys
-        current_section = None
-        current_indent = 0
+        # Stack keeps track of (indentation_level, dictionary_object)
+        section_stack = [(-1, metadata)]
 
         with open(filepath, 'r') as f:
             reader = csv.reader(f)
@@ -149,25 +164,52 @@ class DataManager:
                 if line.startswith('#'):
                     # Handle section headers (e.g., "# Monochromator:") or key-value pairs
                     content = line.lstrip('# ')
+                    indent = len(line) - len(line.lstrip('# '))
                     
                     if content.endswith(':'):
                         # Section header
                         current_section = content.rstrip(':').strip()
-                        current_indent = len(line) - len(line.lstrip('# ')) # Check indentation level
-                        if current_section not in metadata:
-                            metadata[current_section] = {}
+                        sect_lower = current_section.lower()
+                        if sect_lower == 'laser':
+                            current_section = 'Laser'
+                        elif sect_lower == 'step':
+                            current_section = 'Step'
+                        elif sect_lower == 'camera':
+                            current_section = 'Camera'
+                        elif sect_lower == 'monochromator':
+                            current_section = 'Monochromator'
+                        
+                        # Find parent dict based on indentation
+                        while len(section_stack) > 1 and section_stack[-1][0] >= indent:
+                            section_stack.pop()
+                        parent_dict = section_stack[-1][1]
+                        
+                        if current_section not in parent_dict or not isinstance(parent_dict[current_section], dict):
+                            parent_dict[current_section] = {}
+                        
+                        section_stack.append((indent, parent_dict[current_section]))
                         continue
                     
                     # Key-value pair
                     if len(row) >= 2:
                         key = content.strip()
+                        key_lower = key.lower()
+                        if key_lower == 'laser':
+                            key = 'Laser'
+                        elif key_lower == 'step':
+                            key = 'Step'
+                        elif key_lower == 'camera':
+                            key = 'Camera'
+                        elif key_lower == 'monochromator':
+                            key = 'Monochromator'
                         val = row[1].strip()
                         
-                        # Store in current section if it exists and is deeper than top level
-                        if current_section:
-                            metadata[current_section][key] = val
-                        else:
-                            metadata[key] = val
+                        # Find parent dict based on indentation
+                        while len(section_stack) > 1 and section_stack[-1][0] >= indent:
+                            section_stack.pop()
+                        parent_dict = section_stack[-1][1]
+                        
+                        parent_dict[key] = val
                     continue
                 
                 # If we hit a non-comment line, it might be the column headers
@@ -276,14 +318,25 @@ class DataManager:
     def _write_metadata_to_txt(self, f, meta: dict, indent=''):
         """Recursively write metadata dictionary to text file."""
         for k, v in meta.items():
-            if k == 'Processing' and indent == '':
+            key_str = str(k)
+            key_lower = key_str.lower()
+            if key_lower == 'laser':
+                key_str = 'Laser'
+            elif key_lower == 'step':
+                key_str = 'Step'
+            elif key_lower == 'camera':
+                key_str = 'Camera'
+            elif key_lower == 'monochromator':
+                key_str = 'Monochromator'
+
+            if key_str == 'Processing' and indent == '':
                 f.write("\n") # Blank line before processing for readability
 
             if isinstance(v, dict):
-                f.write(f"{indent}{k}:\n")
+                f.write(f"{indent}{key_str}:\n")
                 self._write_metadata_to_txt(f, v, indent + '  ')
             else:
-                f.write(f"{indent}{k}: {v}\n")
+                f.write(f"{indent}{key_str}: {v}\n")
 
     def save_experiment(self, experiment_name: str,
                        results: List[MeasurementResult]) -> Path:

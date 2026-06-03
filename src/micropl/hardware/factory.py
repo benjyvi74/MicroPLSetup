@@ -7,21 +7,20 @@ import logging
 
 from .base import Instrument
 from .kdc101 import ThorlabsKDC101
-from .pm100 import PM100
-from .fhr640 import FHR640
+from .pm100 import ThorlabsPM100
+from .horiba_serial import HoribaSerialMonochromator
+from .horiba_sdk import HoribaSDKMonochromator
 from .andor_camera import AndorCamera
-from .stage import StageStub
 
 logger = logging.getLogger(__name__)
 
 
-# Registry of available drivers
 DRIVER_REGISTRY: Dict[str, Type[Instrument]] = {
-    'kdc101': ThorlabsKDC101,
-    'pm100': PM100,
-    'fhr640': FHR640,
-    'andor_camera': AndorCamera,
-    'stage': StageStub,
+    'kdc101':        ThorlabsKDC101,
+    'pm100':         ThorlabsPM100,
+    'horiba_serial': HoribaSerialMonochromator,
+    'horiba_sdk':    HoribaSDKMonochromator,
+    'andor_camera':  AndorCamera,
 }
 
 

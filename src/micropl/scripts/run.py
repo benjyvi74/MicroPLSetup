@@ -94,7 +94,8 @@ if __name__ == '__main__':
         splash.set_progress(35, "Loading Control Panels...")
         import micropl.gui.monochromator_panel
         import micropl.gui.powermeter_panel
-        import micropl.gui.kdc101_panel
+        import micropl.gui.polarizer_panel
+        import micropl.gui.stage_panel
         QTimer.singleShot(100, load_step_7)
         
     def load_step_7():

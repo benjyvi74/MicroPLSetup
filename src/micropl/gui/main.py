@@ -4,10 +4,11 @@ Main window and application entry point for MicroPL GUI.
 
 import sys
 import logging
+from threading import Thread
 from ..qt import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QTabWidget, QStatusBar, QMenuBar, QMenu,
-    Qt, QAction, QSplitter, QFrame
+    Qt, QAction, QSplitter, QFrame, QSizePolicy, QLabel
 )
 
 from .automation_panel import AutomationPanel
@@ -15,9 +16,10 @@ from .measurement_panel import MeasurementPanel
 from .live_view import LiveView
 from .monochromator_panel import MonochromatorPanel
 from .powermeter_panel import PowerMeterPanel
-from .kdc101_panel import KDC101Panel
+from .polarizer_panel import PolarizerPanel
+from .setup_tab import SetupTab
+from .equipment_sidebar import EquipmentSidebar
 
-from ..hardware.andor_camera import discover_cameras
 from ..hardware.manager import HardwareManager
 
 from .log_viewer import QtLogHandler, LogViewerDialog
@@ -90,40 +92,88 @@ class MainWindow(QMainWindow):
         if splash: splash.set_progress(60, "Loading Live View...")
         self.live_view = LiveView()
         
-        # Add tabs (Monochromator moved to right panel)
-        self.tabs.addTab(self.live_view, "Acquisition")
-        self.tabs.addTab(self.automation_panel, "Automation")
-        self.tabs.addTab(self.measurement_panel, "Measurement")
-        
+        if splash: splash.set_progress(65, "Loading Hardware Setup Tab...")
+        self.setup_tab = SetupTab(self.hw)
+        self.setup_tab.hw_config_changed.connect(self._on_hw_config_changed)
+
+
         splitter.addWidget(self.tabs)
 
-        if splash: splash.set_progress(70, "Loading Hardware Controls...")
-        # Right side: Control panel
-        right_panel = QWidget()
-        right_layout = QVBoxLayout()
-        right_panel.setLayout(right_layout)
+        if splash: splash.set_progress(70, "Loading Equipment Sidebar...")
+        # The sidebar now automatically manages panel creation based on active config
+        self.equipment_sidebar = EquipmentSidebar(self.hw)
+
+        # Build the Acquisition tab layout: [live_view | horizontal splitter | {sidebar + cameras}]
+        # Using a horizontal splitter between the main view and the right column
+        acq_main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        acq_main_splitter.setHandleWidth(6)
+        acq_main_splitter.setStyleSheet("QSplitter::handle { background-color: #e0e0e0; }")
         
-        # Add control panels vertically with separators
-        self.mono_panel = MonochromatorPanel()
-        self.powermeter_panel = PowerMeterPanel()
+        # Left: Main Live View area
+        acq_main_splitter.addWidget(self.live_view)
+
+        # Right: Control Column (Equipment + Cameras)
+        # Using a vertical splitter so user can adjust height of each section
+        right_splitter = QSplitter(Qt.Orientation.Vertical)
+        right_splitter.setHandleWidth(6)
+        right_splitter.setChildrenCollapsible(False)
+        right_splitter.setStyleSheet("QSplitter::handle { background-color: #e0e0e0; }")
+        right_splitter.setMinimumWidth(370) # Spacious width + scrollbar buffer
+        right_splitter.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         
-        if splash: splash.set_progress(80, "Loading Motor Controls...")
-        self.kdc101_panel = KDC101Panel()
+        # 1. Equipment Section
+        eq_container = QWidget()
+        eq_layout = QVBoxLayout(eq_container)
+        eq_layout.setContentsMargins(0, 5, 0, 0)
+        eq_layout.setSpacing(5)
         
-        right_layout.addWidget(self.mono_panel)
-        right_layout.addWidget(self._create_separator())
-        right_layout.addWidget(self.powermeter_panel)
-        right_layout.addWidget(self._create_separator())
-        right_layout.addWidget(self.kdc101_panel)
-        right_layout.addStretch()
+        eq_title = QLabel("INSTRUMENTS")
+        eq_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        eq_title.setStyleSheet("font-weight: bold; color: white; background-color: #fd7e14; font-size: 10px; letter-spacing: 1px; padding: 4px 6px; border-radius: 4px;")
+        eq_layout.addWidget(eq_title)
+        eq_layout.addWidget(self.equipment_sidebar)
         
-        # Set minimum width for right panel
-        right_panel.setMinimumWidth(400)
+        right_splitter.addWidget(eq_container)
+
+        # 2. Camera Section
+        cam_container = QWidget()
+        cam_layout = QVBoxLayout(cam_container)
+        cam_layout.setContentsMargins(0, 5, 0, 0)
+        cam_layout.setSpacing(5)
         
-        splitter.addWidget(right_panel)
+        cam_title = QLabel("CAMERAS")
+        cam_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cam_title.setStyleSheet("font-weight: bold; color: white; background-color: #007bff; font-size: 10px; letter-spacing: 1px; padding: 4px 6px; border-radius: 4px;")
+        cam_layout.addWidget(cam_title)
+        cam_layout.addWidget(self.live_view.camera_scroll)
         
-        # Set initial sizes: 70% left, 30% right
-        splitter.setSizes([1000, 400])
+        right_splitter.addWidget(cam_container)
+        
+        # Set initial stretches for the vertical splitter
+        right_splitter.setStretchFactor(0, 2)
+        right_splitter.setStretchFactor(1, 1)
+
+        # Add the vertical splitter to the main horizontal splitter
+        acq_main_splitter.addWidget(right_splitter)
+        
+        # Set stretches for the horizontal splitter (LiveView expands, Sidebar stays compact)
+        acq_main_splitter.setStretchFactor(0, 1)
+        acq_main_splitter.setStretchFactor(1, 0)
+        
+        # Force the splitter to a very spacious minimum position + scrollbar buffer
+        acq_main_splitter.setSizes([10000, 370])
+        
+        # Make the main splitter the widget for the Acquisition tab
+        acq_widget = acq_main_splitter
+
+        # Instead of reparenting which shifts indices, insert the composed widget
+        # and then add the other tabs. We'll rebuild the tabs array from scratch here:
+        self.tabs.clear()
+        self.tabs.addTab(acq_widget, "Acquisition")
+        self.tabs.addTab(self.automation_panel, "Automation")
+        self.tabs.addTab(self.measurement_panel, "Measurement")
+        self.tabs.addTab(self.setup_tab, "⚙ Setup")
+        self.tabs.setCurrentIndex(0)
 
         # --- SIGNAL CONNECTIONS (INTER-PANEL) ---
         # 1. Automation -> Measurement Monitor
@@ -142,7 +192,20 @@ class MainWindow(QMainWindow):
         # 3. Measurement Monitor -> Automation/LiveView (Abort)
         self.measurement_panel.stop_requested.connect(self.automation_panel.stop_sequence)
         self.measurement_panel.stop_requested.connect(self.live_view.stop_sequence)
+        self.measurement_panel.pause_requested.connect(self.live_view.pause_sequence)
+        self.measurement_panel.resume_requested.connect(self.live_view.resume_sequence)
+        self.measurement_panel.abort_requested.connect(self.live_view.stop_sequence)
 
+
+    def _on_hw_config_changed(self):
+        """Called when the Setup Tab applies new hardware config."""
+        logger.info("Hardware config changed — rebuilding UI.")
+
+        # 1. Refresh camera strip in LiveView
+        self.live_view.rebuild_camera_strip()
+
+        # 2. Rebuild equipment sidebar
+        self.equipment_sidebar.rebuild()
 
     def _create_separator(self) -> QFrame:
         """Create a horizontal line separator."""
@@ -176,13 +239,18 @@ class MainWindow(QMainWindow):
         # Hardware menu
         hardware_menu = menubar.addMenu("Hardware")
 
-        connect_action = QAction("Connect All", self)
-        connect_action.triggered.connect(self.connect_hardware)
-        hardware_menu.addAction(connect_action)
+        self.connect_action = QAction("Connect All", self)
+        self.connect_action.triggered.connect(self.connect_hardware)
+        hardware_menu.addAction(self.connect_action)
 
-        disconnect_action = QAction("Disconnect All", self)
-        disconnect_action.triggered.connect(self.disconnect_hardware)
-        hardware_menu.addAction(disconnect_action)
+        self.disconnect_action = QAction("Disconnect All", self)
+        self.disconnect_action.triggered.connect(self.disconnect_hardware)
+        hardware_menu.addAction(self.disconnect_action)
+
+        hardware_menu.addSeparator()
+        setup_action = QAction("Hardware Setup...", self)
+        setup_action.triggered.connect(lambda: self.tabs.setCurrentWidget(self.setup_tab))
+        hardware_menu.addAction(setup_action)
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -210,68 +278,161 @@ class MainWindow(QMainWindow):
         self.statusbar.showMessage("Configuration saved")
 
     def connect_hardware(self):
-        """Connect to all hardware components using auto-discovery for cameras."""
-        logger.info("Discovering and connecting hardware...")
+        """Connect to all hardware components from configuration in a background thread."""
+        logger.info("Initializing and connecting hardware from config...")
         
-        # 1. Discover Cameras
-        available_cameras = discover_cameras()
-        logger.info(f"Discovered {len(available_cameras)} Andor camera(s)")
-        
-        vis_config = None
-        spec_config = None
-        
-        # Automatically assign roles based on model
-        for cam_id, info in available_cameras.items():
-            model = info['model']
-            if 'DL604M' in model:
-                vis_config = info.copy()
-                vis_config['temperature'] = -20
-                logger.info(f"Assigned {model} ({cam_id}) to Visualisation role")
-            elif 'DU420' in model:
-                spec_config = info.copy()
-                spec_config['temperature'] = -70
-                logger.info(f"Assigned {model} ({cam_id}) to Spectrometer role")
+        self.connect_action.setEnabled(False)
+        self.disconnect_action.setEnabled(False)
+        self.statusbar.showMessage("Connecting all hardware...")
 
-        # 2. Initialize Visualisation Camera
-        if not self.hw.vis_camera:
-            if vis_config:
-                self.hw.initialize_instrument('vis_camera', 'andor_camera', vis_config)
-            else:
-                # Fallback to defaults if not discovered
-                logger.warning("Visualisation camera (DL604M) not discovered, using defaults")
-                self.hw.initialize_instrument('vis_camera', 'andor_camera', {
-                    'model': 'DL604M',
-                    'sdk_version': 2,
-                    'camera_index': 0,
-                    'temperature': -20
-                })
-            
-        # 3. Initialize Spectrometer Camera
-        if not self.hw.spec_camera:
-            if spec_config:
-                self.hw.initialize_instrument('spec_camera', 'andor_camera', spec_config)
-            else:
-                # Fallback
-                logger.warning("Spectrometer camera (DU420) not discovered, using defaults")
-                self.hw.initialize_instrument('spec_camera', 'andor_camera', {
-                    'model': 'DU420A-BR-DD',
-                    'sdk_version': 2,
-                    'camera_index': 1,
-                    'temperature': -70
-                })
+        import threading
+        import time
+        from PyQt6.QtCore import QTimer
 
-        # 4. Initialize Monochromator, Power Meter, and KDC101
-        if not self.hw.get_instrument('mono'):
-            self.hw.initialize_instrument('mono', 'fhr640')
-        
-        if not self.hw.get_instrument('pm100'):
-            self.hw.initialize_instrument('pm100', 'pm100')
-            
-        if not self.hw.get_instrument('kdc101'):
-            self.hw.initialize_instrument('kdc101', 'kdc101')
+        def _bg_connect():
+            try:
+                hw_cfg = self.hw.config.get('hardware', {})
 
-        self.hw.connect_all()
-        self.statusbar.showMessage("Hardware connected")
+                # 1. Initialize and connect cameras from config list
+                cameras_cfg = hw_cfg.get('cameras', [])
+                for cam_cfg in cameras_cfg:
+                    if not cam_cfg.get('enabled', False):
+                        continue
+                    cam_id = cam_cfg['id']
+                    driver = cam_cfg.get('driver', 'andor_camera')
+                    
+                    QTimer.singleShot(0, lambda cid=cam_id: self.statusbar.showMessage(f"Connecting camera {cid}..."))
+                    
+                    card = self.live_view.camera_panels.get(cam_id)
+                    if card:
+                        QTimer.singleShot(0, lambda c=card: c.update_connection_state(connected=False, connecting=True))
+
+                    try:
+                        if not self.hw.get_camera(cam_id):
+                            self.hw.initialize_instrument(cam_id, driver, cam_cfg)
+                            logger.info(f"Initialized camera '{cam_id}' ({cam_cfg.get('name', '')})")
+                        
+                        cam = self.hw.get_camera(cam_id)
+                        if cam:
+                            cam.connect()
+                            logger.info(f"Camera '{cam_id}' connected successfully")
+                            
+                            # Sync calibration if it's the spectroscopy camera
+                            if cam_id == self.hw.get_spectroscopy_camera_id():
+                                self.hw.sync_calibration_with_hardware()
+                    except Exception as e:
+                        logger.error(f"Failed to connect camera '{cam_id}': {e}")
+                    finally:
+                        self.live_view.sig_cam_connect_done.emit(cam_id)
+                        if card:
+                            QTimer.singleShot(0, lambda c=card: c.connect_btn.setEnabled(True))
+                        
+                    # SDK stabilization delay
+                    time.sleep(0.5)
+
+                # 2. Initialize and connect monochromators
+                monos_cfg = hw_cfg.get('monochromators', [])
+                for mono_cfg in monos_cfg:
+                    if not mono_cfg.get('enabled', False):
+                        continue
+                    mono_id = mono_cfg['id']
+                    driver = mono_cfg.get('driver', 'horiba_serial')
+                    
+                    QTimer.singleShot(0, lambda mid=mono_id: self.statusbar.showMessage(f"Connecting monochromator {mid} (Homing)..."))
+                    
+                    mono_panel = None
+                    for wrapper in self.equipment_sidebar._wrappers:
+                        if wrapper.acc_id == 'mono':
+                            mono_panel = wrapper.content_widget
+                            break
+                    if mono_panel:
+                        QTimer.singleShot(0, lambda mp=mono_panel: mp.sig_status_changed.emit("Homing..."))
+                        QTimer.singleShot(0, lambda mp=mono_panel: setattr(mp, '_connecting', True))
+                        QTimer.singleShot(0, lambda mp=mono_panel: mp.connect_btn.setEnabled(False))
+
+                    try:
+                        if not self.hw.get_instrument(mono_id):
+                            self.hw.initialize_instrument(mono_id, driver, mono_cfg)
+                            logger.info(f"Initialized monochromator '{mono_id}' ({mono_cfg.get('name', '')})")
+                        
+                        mono = self.hw.get_instrument(mono_id)
+                        if mono:
+                            mono.connect()
+                            logger.info(f"Monochromator '{mono_id}' connected successfully")
+                            
+                            # Apply defaults post-homing
+                            default_wl = float(mono_cfg.get('center_wavelength', 500.0))
+                            default_slit = float(mono_cfg.get('slit_width', 100.0))
+                            default_grating_idx = int(mono_cfg.get('grating_idx', 1))
+                            target_unit = "nm"
+                            
+                            logger.info(f"Applying targets post-homing: Index {default_grating_idx} grating, {default_wl} {target_unit}, {default_slit} um slits")
+                            try:
+                                mono.set_grating(default_grating_idx)
+                                mono.set_spectral_position(default_wl, target_unit)
+                                mono.set_slit_width(default_slit, slit_id=0)
+                                mono.set_slit_width(default_slit, slit_id=2)
+                                logger.info("Monochromator initialization and target move complete")
+                            except Exception as ex:
+                                logger.error(f"Failed to apply monochromator defaults: {ex}")
+                    except Exception as e:
+                        logger.error(f"Failed to connect monochromator '{mono_id}': {e}")
+                    finally:
+                        if mono_panel:
+                            QTimer.singleShot(0, lambda mp=mono_panel: setattr(mp, '_connecting', False))
+                            QTimer.singleShot(0, lambda mp=mono_panel: mp.connect_btn.setEnabled(True))
+                    
+                    time.sleep(0.1)
+
+                # 3. Initialize accessories from config list
+                accessories_cfg = hw_cfg.get('accessories', [])
+                for acc_cfg in accessories_cfg:
+                    if not acc_cfg.get('enabled', False):
+                        continue
+                    acc_id = acc_cfg['id']
+                    driver = acc_cfg.get('driver', acc_id)
+                    
+                    QTimer.singleShot(0, lambda aid=acc_id: self.statusbar.showMessage(f"Connecting accessory {aid}..."))
+                    
+                    panel_id = acc_id
+                    if acc_id in ('stage_x', 'stage_y'):
+                        panel_id = 'stage'
+                    
+                    acc_panel = None
+                    for wrapper in self.equipment_sidebar._wrappers:
+                        if wrapper.acc_id == panel_id:
+                            acc_panel = wrapper.content_widget
+                            break
+                    if acc_panel:
+                        QTimer.singleShot(0, lambda ap=acc_panel: setattr(ap, '_connecting', True))
+                        QTimer.singleShot(0, lambda ap=acc_panel: ap.connect_btn.setEnabled(False) if hasattr(ap, 'connect_btn') else None)
+
+                    try:
+                        if not self.hw.get_instrument(acc_id):
+                            self.hw.initialize_instrument(acc_id, driver, acc_cfg)
+                            logger.info(f"Initialized accessory '{acc_id}' ({acc_cfg.get('name', '')})")
+                        
+                        acc = self.hw.get_instrument(acc_id)
+                        if acc:
+                            acc.connect()
+                            logger.info(f"Accessory '{acc_id}' connected successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to connect accessory '{acc_id}': {e}")
+                    finally:
+                        if acc_panel:
+                            QTimer.singleShot(0, lambda ap=acc_panel: setattr(ap, '_connecting', False))
+                            QTimer.singleShot(0, lambda ap=acc_panel: ap.connect_btn.setEnabled(True) if hasattr(ap, 'connect_btn') else None)
+                    
+                    time.sleep(0.1)
+
+            except Exception as e:
+                logger.error(f"Error in background connection thread: {e}")
+            finally:
+                QTimer.singleShot(0, lambda: self.connect_action.setEnabled(True))
+                QTimer.singleShot(0, lambda: self.disconnect_action.setEnabled(True))
+                QTimer.singleShot(0, lambda: self.statusbar.showMessage("Hardware connected"))
+
+        Thread(target=_bg_connect, daemon=True).start()
 
     def disconnect_hardware(self):
         """Disconnect from all hardware."""

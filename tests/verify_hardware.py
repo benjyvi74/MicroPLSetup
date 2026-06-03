@@ -25,7 +25,8 @@ class TestAndorCamera:
     
     @pytest.fixture(autouse=True)
     def setup_camera(self, hw_manager):
-        self.cam = hw_manager.initialize_instrument('spec_camera', 'andor_camera')
+        spec_cam_id = hw_manager.get_spectroscopy_camera_id() or 'camera_1'
+        self.cam = hw_manager.initialize_instrument(spec_cam_id, 'andor_camera')
         self.cam.connect()
         yield
         self.cam.disconnect()

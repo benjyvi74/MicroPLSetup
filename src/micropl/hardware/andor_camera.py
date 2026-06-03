@@ -67,11 +67,14 @@ if PYLABLIB_AVAILABLE:
     from pylablib.devices import Andor
 
 
-# Global SDK Locks to prevent race conditions in non-thread-safe DLLs
-_SDK2_LOCK = threading.RLock() # Protects ALL SDK2 calls (SetCurrentCamera is global in SDK2)
+# Global SDK Locks to prevent race conditions in non-thread-safe DLLs.
+# Specifically, Andor SDK2 uses a global state (e.g., SetCurrentCamera) which means 
+# concurrent access from different threads will crash the driver.
+_SDK2_LOCK = threading.RLock() 
 _SDK3_LOCK = threading.RLock()
 
-# Global Discovery Cache to prevent intrusive re-probing while cameras are active
+# Global Discovery Cache to prevent intrusive re-probing while cameras are active.
+# Hardware scanning resets camera states and can interrupt ongoing acquisitions.
 _DISCOVERY_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
 _DISCOVERY_LOCK = threading.Lock()
 
@@ -170,7 +173,7 @@ class AndorCamera(Camera):
     2. Spectroscopy: Long-exposure spectral acquisition (e.g., DU420A/Newton).
     """
 
-    SUPPORTED_MODELS = ['Luc285_MONO', 'DU420_BR,DD']
+    SUPPORTED_MODELS = ['Luc285_MONO', 'DU420_BR,DD', 'DU491_17', 'DU490_17']
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
@@ -196,6 +199,7 @@ class AndorCamera(Camera):
         # Default to 1024x256 if not specified
         self._configured_detector_size = self.config.get('detector_size', [1024, 256])
         self._actual_detector_size = None
+        self._actual_roi = None # (x_start, x_end, y_start, y_end, x_bin, y_bin)
 
         # Camera instance (pylablib)
         self._cam = None
@@ -667,8 +671,13 @@ class AndorCamera(Camera):
                 n_hss = self._cam.get_number_hsspeeds()
                 hss_freqs = [self._cam.get_hsspeed_frequency(i) for i in range(n_hss)]
                 if hss_freqs:
+                    # Pick the highest frequency (MHz)
                     fastest_idx = hss_freqs.index(max(hss_freqs))
                     self.set_hss_speed(fastest_idx)
+                    logger.info(f"HSS optimized: index {fastest_idx} ({max(hss_freqs)} MHz)")
+                
+                # Also optimize VSS for iDus (usually index 0 is best/fastest)
+                self.set_vss_speed(0)
             except Exception as e:
                 logger.debug(f"HSS optimization skipped or failed: {e}")
             
@@ -910,23 +919,61 @@ class AndorCamera(Camera):
                 
                 roi_height = y_end - y_start
                 
-                # If binning covers the whole height, we can use Single-Track or FVB
-                if y_bin >= roi_height:
-                    if y_start == 0 and y_end == height:
-                        logger.debug(f"Andor Driver: SetReadoutMode(FVB) - h=[{x_start}:{x_end}], hbin={x_bin}")
-                        self.set_readout_mode("FVB")
+                # Determine readout mode to apply:
+                # 1. Use the explicitly set _readout_mode if available.
+                # 2. Otherwise, fallback to the heuristic.
+                mode_to_use = self._readout_mode
+                if mode_to_use is not None:
+                    mode_to_use_upper = mode_to_use.upper()
+                    if mode_to_use_upper not in ["FVB", "SINGLE TRACK", "IMAGE"]:
+                        mode_to_use = None
+                    elif mode_to_use_upper == "SINGLE TRACK" and y_bin < roi_height:
+                        mode_to_use = None
+                    elif mode_to_use_upper == "FVB" and (y_bin < roi_height or y_start != 0 or y_end != height):
+                        mode_to_use = None
+                
+                if mode_to_use is None:
+                    if y_bin >= roi_height:
+                        if y_start == 0 and y_end == height:
+                            mode_to_use = "FVB"
+                        else:
+                            mode_to_use = "Single track"
                     else:
-                        center_row = y_start + roi_height // 2
-                        logger.debug(f"Andor Driver: SetSingleTrack(center={center_row}, height={roi_height})")
-                        self.set_single_track(roi_height, center_row)
-                else:
+                        mode_to_use = "Image"
+                
+                mode_to_use = mode_to_use.upper()
+
+                if mode_to_use == "FVB":
+                    logger.debug(f"Andor Driver: SetReadoutMode(FVB) - h=[{x_start}:{x_end}], hbin={x_bin}")
+                    self.set_readout_mode("FVB")
+                    cached_x_start = 0
+                    cached_x_end = width
+                    actual_y_start = 0
+                    actual_y_end = height
+                    actual_y_bin = height
+                elif mode_to_use == "SINGLE TRACK":
+                    center_row = y_start + roi_height // 2
+                    logger.debug(f"Andor Driver: SetSingleTrack(center={center_row}, height={roi_height})")
+                    self.set_single_track(roi_height, center_row)
+                    cached_x_start = 0
+                    cached_x_end = width
+                    actual_y_start = y_start
+                    actual_y_end = y_end
+                    actual_y_bin = roi_height
+                else:  # IMAGE
                     logger.debug(f"Andor Driver: SetImage(h=[{x_start}:{x_end}], v=[{y_start}:{y_end}], bin=({x_bin},{y_bin}))")
                     self.set_readout_mode("Image")
                     # Pylablib's set_roi expects exclusive ends
                     self._cam.set_roi(hstart=x_start, hend=x_end, vstart=y_start, vend=y_end, hbin=x_bin, vbin=y_bin)
+                    cached_x_start = x_start
+                    cached_x_end = x_end
+                    actual_y_start = y_start
+                    actual_y_end = y_end
+                    actual_y_bin = y_bin
                 
-                # Cache for UI reporting
-                self._roi = (x_start, x_end, y_start, y_end, x_bin, y_bin)
+                # Cache for UI reporting and performance
+                self._actual_roi = (cached_x_start, cached_x_end, actual_y_start, actual_y_end, x_bin, actual_y_bin)
+                self._roi = self._actual_roi
                 
             logger.info(f"ROI set successfully: x=[{x_start}:{x_end}], y=[{y_start}:{y_end}], bin=({x_bin},{y_bin}) on {width}x{height} sensor")
         except Exception as e:
@@ -945,8 +992,13 @@ class AndorCamera(Camera):
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
+        if self._actual_roi is not None:
+            return self._actual_roi
+
         with self._lock:
-            return self._cam.get_roi()
+            roi = self._cam.get_roi()
+            self._actual_roi = roi
+            return roi
 
     def set_readout_mode(self, mode: str) -> None:
         """
@@ -958,6 +1010,11 @@ class AndorCamera(Camera):
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
+        # Skip hardware configuration if readout mode is already set to this mode
+        if self._readout_mode and self._readout_mode.lower() == mode.lower():
+            logger.debug(f"Readout mode is already '{mode}', skipping hardware set.")
+            return
+
         logger.info(f"Setting readout mode to: {mode}")
         self._ensure_stopped()
         try:
@@ -965,6 +1022,14 @@ class AndorCamera(Camera):
             with lock_to_use:
                 with self._lock:
                     if self._sdk_version == 2:
+                        # Linear arrays (1D sensors) often only have one acquisition mode.
+                        # Trying to force Image/Single-Track/FVB on them can cause SDK2 to crash.
+                        det_size = self.get_detector_size()
+                        if det_size[1] <= 1:
+                            logger.info(f"SDK2: Skipping readout mode change for 1D sensor ({self.model})")
+                            self._readout_mode = mode
+                            return
+
                         if mode.upper() == "FVB":
                             self._cam.set_read_mode("fvb")
                         elif mode.upper() == "SINGLE TRACK":
@@ -1236,6 +1301,17 @@ class AndorCamera(Camera):
         logger.info("Starting continuous acquisition (sequence mode)")
 
         with self._lock:
+            # Safety: Ensure hardware is actually idle before configuring acquisition mode
+            # This prevents DRV_ACQUIRING (20072) errors if state is out of sync.
+            try:
+                hw_status = self._cam.get_status() if self._sdk_version == 2 else "idle"
+                if hw_status != 'idle':
+                    logger.debug(f"Camera status is {hw_status}, force stopping before setup")
+                    self._cam.stop_acquisition()
+                    self._cam.clear_acquisition()
+            except:
+                pass
+
             try:
                 # sequence mode in pylablib is best for live view
                 if self._sdk_version == 2:
@@ -1267,6 +1343,8 @@ class AndorCamera(Camera):
             try:
                 if self._cam:
                     self._cam.stop_acquisition()
+                    # Small delay to let hardware finish current cycle
+                    time.sleep(0.05)
                     self._cam.clear_acquisition()
                 self._acquiring = False
                 logger.info("Acquisition stopped")
@@ -1278,22 +1356,25 @@ class AndorCamera(Camera):
     def is_acquiring(self) -> bool:
         """
         Check if camera is currently acquiring.
-        Optimized but robust to SDK states.
+        Optimized with rate-limited hardware sync.
         """
-        # Fast path: if our internal flag is set, it's definitely acquiring
+        # Always return True if we think we are acquiring
         if self._acquiring:
             return True
-
-        # Slow path: check hardware status (only if connected)
-        try:
-            if self._sdk_version == 2:
-                # SDK2 status strings from pylablib: 'idle', 'acquiring', 'temp_cycle', 'error', etc.
-                with self._lock:
-                    status = self._cam.get_status()
-                return status in ['acquiring', 'temp_cycle', 'accum_not_met', 'kinetic_not_met']
-            return self._acquiring
-        except Exception:
-            return self._acquiring
+            
+        # Occasionally check hardware to ensure we didn't miss a stop event
+        now = time.time()
+        if not hasattr(self, '_last_status_check'): self._last_status_check = 0
+        if (now - self._last_status_check) > 0.5: # Every 500ms
+            self._last_status_check = now
+            try:
+                if self._sdk_version == 2:
+                    with self._lock:
+                        status = self._cam.get_status()
+                    return status in ['acquiring', 'temp_cycle', 'accum_not_met', 'kinetic_not_met']
+            except:
+                pass
+        return self._acquiring
 
     def read_oldest_image(self) -> Optional[np.ndarray]:
         """

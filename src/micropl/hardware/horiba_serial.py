@@ -1,5 +1,5 @@
 """
-Horiba FHR640 spectrometer driver using native RS-232 serial protocol.
+Horiba Monochromator driver using native RS-232 serial protocol (FHR640).
 """
 
 import logging
@@ -18,9 +18,10 @@ from .base import Spectrometer
 logger = logging.getLogger(__name__)
 
 
-class FHR640(Spectrometer):
+class HoribaSerialMonochromator(Spectrometer):
     """
-    Driver for Horiba FHR640 spectrometer using native Serial commands.
+    Driver for Horiba Monochromators using native Serial commands.
+    Currently tested with FHR640.
     
     Protocol: 19200 Baud, 8N1.
     Cable: Null-Modem RS-232.
@@ -53,20 +54,20 @@ class FHR640(Spectrometer):
         self._center_wavelength = self.config.get('center_wavelength', 500)
 
     def connect(self) -> None:
-        """Connect to the FHR640 using pyserial and perform startup sequence."""
+        """Connect to the Horiba using pyserial and perform startup sequence."""
         if self._connected:
             return
 
         if serial is None:
             raise RuntimeError("pyserial is not installed. Install with: pip install pyserial")
 
-        logger.info(f"Connecting to FHR640 on {self.port} at {self.baudrate} baud")
+        logger.info(f"Connecting to Horiba on {self.port} at {self.baudrate} baud")
 
         with self._lock:
             max_attempts = 5
             for attempt in range(max_attempts):
                 try:
-                    logger.info(f"Connecting to FHR640 on {self.port} (Attempt {attempt+1}/{max_attempts})")
+                    logger.info(f"Connecting to Horiba on {self.port} (Attempt {attempt+1}/{max_attempts})")
                     
                     # Close if accidentally left open
                     if self._serial and self._serial.is_open:
@@ -82,6 +83,8 @@ class FHR640(Spectrometer):
                     )
 
                     # --- REFRESH PORT ---
+                    # The FHR640 RS232 interface can be finicky if left in an unclean state.
+                    # Flipping DTR/RTS lines helps reset the internal serial buffer of the instrument.
                     self._serial.dtr = False
                     self._serial.rts = False
                     time.sleep(0.1)
@@ -103,16 +106,16 @@ class FHR640(Spectrometer):
                             if b'F' in response or b'*' in response:
                                 self._connected = True
                                 # Calibrate logic (Wait for home completion)
-                                logger.info("FHR640: Calibrating/Homing...")
+                                logger.info("Horiba: Calibrating/Homing...")
                                 orig_timeout = self._serial.timeout
                                 self._serial.timeout = 120.0
                                 try:
                                     self._serial.write(b'A\r')
                                     ack = self._serial.read(1)
                                     if ack == b'o':
-                                        logger.info("FHR640: Calibrated.")
+                                        logger.info("Horiba: Calibrated.")
                                     else:
-                                        logger.warning(f"FHR640: Calibration handshake failed: {ack}")
+                                        logger.warning(f"Horiba: Calibration handshake failed: {ack}")
                                 finally:
                                     self._serial.timeout = orig_timeout
                                 return
@@ -150,7 +153,7 @@ class FHR640(Spectrometer):
         if not self.is_connected():
             raise RuntimeError("Device not connected")
 
-        logger.info("FHR640: Starting full auto-calibration (Homing)...")
+        logger.info("Horiba: Starting full auto-calibration (Homing)...")
         # Command 'A' is MOTOR INIT. It returns 'o' ONLY when finished.
         
         with self._lock:
@@ -161,12 +164,12 @@ class FHR640(Spectrometer):
                 self._serial.write(b'A\r')
                 ack = self._serial.read(1)
                 if ack == b'o':
-                    logger.info("FHR640: Auto-calibration successful. Motors homed.")
+                    logger.info("Horiba: Auto-calibration successful. Motors homed.")
                     # After 'A', the controller usually ends at a reference position (~115 nm)
                     # We should update our internal state by reading the new wavelength.
                     self.get_current_wavelength()
                 else:
-                    raise RuntimeError(f"FHR640 calibration failed or timed out: {ack}")
+                    raise RuntimeError(f"Horiba calibration failed or timed out: {ack}")
             finally:
                 self._serial.timeout = orig_timeout
 
@@ -177,17 +180,17 @@ class FHR640(Spectrometer):
         Args:
             full_calibrate: This is now the default behavior in connect().
         """
-        logger.info("FHR640: Performing Reconnect...")
+        logger.info("Horiba: Performing Reconnect...")
         self.disconnect()
         time.sleep(1.0)
         self.connect()
-        logger.info("FHR640: Reconnect completed.")
+        logger.info("Horiba: Reconnect completed.")
 
     def disconnect(self) -> None:
         """Close serial connection."""
         with self._lock:
             if self._serial and self._serial.is_open:
-                logger.info("Disconnecting FHR640")
+                logger.info("Disconnecting Horiba")
                 self._serial.close()
             self._serial = None
             self._connected = False
@@ -214,21 +217,29 @@ class FHR640(Spectrometer):
             elif ack == b'b':
                 # Clear buffer on error
                 self._serial.reset_input_buffer()
-                raise RuntimeError(f"FHR640 returned BAD command error for: {cmd}")
+                raise RuntimeError(f"Horiba returned BAD command error for: {cmd}")
             else:
                 # Clear buffer on unexpected
                 self._serial.reset_input_buffer()
-                raise RuntimeError(f"FHR640 returned unexpected response: {ack}")
+                raise RuntimeError(f"Horiba returned unexpected response: {ack}")
 
     def _scale_to_hw(self, wavelength: float) -> float:
-        """Convert real physical wavelength to hardware's internal value."""
+        """
+        Convert real physical wavelength to hardware's internal pulse value.
+        The FHR640 firmware internal calibration assumes a 'Base Grating' 
+        (usually 1200 l/mm). When using a different grating, the physical rotation 
+        required is different, so we must scale the requested wavelength.
+        """
         # hw_wl = real_wl / (base_density / current_density)
         # e.g. for 600 g/mm: hw_wl = 750 / (1200 / 600) = 375
         scale = self.base_grating_density / self.current_grating_density
         return wavelength / scale
 
     def _scale_from_hw(self, hw_wavelength: float) -> float:
-        """Convert hardware's internal wavelength value to real physical units."""
+        """
+        Convert hardware's internal wavelength pulse value back to real physical units.
+        This is the inverse of `_scale_to_hw`, used when reading the current position.
+        """
         # real_wl = hw_wl * (base_density / current_density)
         # e.g. for 600 g/mm: real_wl = 375 * (1200 / 600) = 750
         scale = self.base_grating_density / self.current_grating_density
@@ -260,7 +271,7 @@ class FHR640(Spectrometer):
         start_time = time.time()
         while self.is_busy():
             if time.time() - start_time > timeout:
-                raise TimeoutError("FHR640 movement timed out")
+                raise TimeoutError("Horiba movement timed out")
             time.sleep(0.1)
 
     def set_center_wavelength(self, wavelength: float) -> None:
@@ -268,7 +279,7 @@ class FHR640(Spectrometer):
         Move to absolute wavelength position (in nm).
         Command: Z61,0,[wavelength]<CR>
         """
-        logger.info(f"Moving FHR640 to {wavelength} nm")
+        logger.info(f"Moving Horiba to {wavelength} nm")
         
         # Scale for current grating density
         hw_wavelength = self._scale_to_hw(wavelength)
@@ -305,7 +316,7 @@ class FHR640(Spectrometer):
         else:
             raise ValueError(f"Unsupported unit: {unit}. Use 'nm', 'meV', or 'cm⁻¹'.")
             
-        logger.info(f"FHR640: Setting spectral position to {value} {unit} ({target_nm:.3f} nm)")
+        logger.info(f"Horiba: Setting spectral position to {value} {unit} ({target_nm:.3f} nm)")
         self.set_center_wavelength(target_nm)
 
     def calibrate(self, wavelength: float) -> None:
@@ -314,7 +325,7 @@ class FHR640(Spectrometer):
         Use this if the spectrometer reading doesn't match a known laser line.
         Command: Z60,0,[wavelength]<CR>
         """
-        logger.info(f"Calibrating FHR640: Defining current position as {wavelength} nm")
+        logger.info(f"Calibrating Horiba: Defining current position as {wavelength} nm")
         
         # Scale for current grating density
         hw_wavelength = self._scale_to_hw(wavelength)
@@ -342,7 +353,7 @@ class FHR640(Spectrometer):
         Select grating index (0, 1, or 2).
         Command: Z451,0,0,0,[index]<CR>
         """
-        logger.info(f"FHR640: Selecting grating index {index}")
+        logger.info(f"Horiba: Selecting grating index {index}")
         # Format Z451,[mono],[device_type],[device_num],[position]
         cmd = f"Z451,0,0,0,{index}"
         self._send_command(cmd)
@@ -351,7 +362,7 @@ class FHR640(Spectrometer):
         # Update density tracking
         if index < len(self.grating_densities):
             self.current_grating_density = self.grating_densities[index]
-            logger.info(f"FHR640: Density updated to {self.current_grating_density} g/mm")
+            logger.info(f"Horiba: Density updated to {self.current_grating_density} g/mm")
         
         # Turret movement can be slow
         start_time = time.time()
@@ -366,10 +377,10 @@ class FHR640(Spectrometer):
                 logger.warning(f"Error checking turret status: {e}")
                 
             if time.time() - start_time > 60:
-                raise TimeoutError("FHR640 grating switch timed out")
+                raise TimeoutError("Horiba grating switch timed out")
             time.sleep(0.5)
             
-        logger.info(f"FHR640: Switched to grating {index}")
+        logger.info(f"Horiba: Switched to grating {index}")
 
     def get_grating(self, force_read: bool = False) -> int:
         """Read current grating turret index (0, 1, or 2)."""
@@ -419,7 +430,7 @@ class FHR640(Spectrometer):
         start_time = time.time()
         while self.acc_is_busy():
             if time.time() - start_time > timeout:
-                raise TimeoutError("FHR640 accessory movement timed out")
+                raise TimeoutError("Horiba accessory movement timed out")
             time.sleep(0.2)
 
     def set_mirror(self, port: str = "entrance", position: str = "direct") -> None:
@@ -450,14 +461,14 @@ class FHR640(Spectrometer):
             raise ValueError(f"Invalid mirror configuration: {port} - {pos}")
             
         cmd = cmd_map[key]
-        logger.info(f"FHR640: Moving {port} mirror to {pos} position (Command: {cmd})")
+        logger.info(f"Horiba: Moving {port} mirror to {pos} position (Command: {cmd})")
         
         with self._lock:
             # These commands return 'o' then return control
             self._serial.write(f"{cmd}\r".encode())
             ack = self._serial.read(1)
             if ack != b'o':
-                raise RuntimeError(f"FHR640 rejected mirror command {cmd}: {ack}")
+                raise RuntimeError(f"Horiba rejected mirror command {cmd}: {ack}")
             
         # Optional: wait for accessory to reach position
         # self.wait_acc_ready()
@@ -485,7 +496,7 @@ class FHR640(Spectrometer):
                 logger.debug(f"Slit {slit_id} already at {width_um} um")
                 return
 
-            logger.info(f"FHR640: Moving slit {slit_id} from {current_steps} to {target_steps} steps (Delta: {delta_steps})")
+            logger.info(f"Horiba: Moving slit {slit_id} from {current_steps} to {target_steps} steps (Delta: {delta_steps})")
             
             # Slit Move Relative is 'k'. 
             # Manual says positive = wider, negative = narrower.
@@ -510,11 +521,11 @@ class FHR640(Spectrometer):
             return 0.0
 
     def acquire_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        raise NotImplementedError("Use AndorCamera for acquisition. FHR640 is for wavelength control.")
+        raise NotImplementedError("Use AndorCamera for acquisition. Horiba is for wavelength control.")
 
     def get_info(self) -> Dict[str, Any]:
         return {
-            'model': 'FHR640 (Serial)',
+            'model': 'Horiba (Serial)',
             'port': self.port,
             'connected': self.is_connected(),
             'wavelength': self._center_wavelength

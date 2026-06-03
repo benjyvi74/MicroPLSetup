@@ -204,16 +204,23 @@ class AlignmentCalibration:
 class SpectrometerCalibration:
     """
     Manage pixel-to-wavelength conversion for a Czerny-Turner spectrometer.
-    Based on the FHR640 physical model and Excel formulas provided by the user.
+    Based on the Horiba (e.g. FHR640) physical model and Excel formulas provided by the user.
     """
 
     def __init__(self, focal_length_mm: float,
                  deviation_deg: float,
                  sensor_tilt_deg: float,
                  pixel_stride_um: float):
+        # f: Focal length of the spectrometer (distance from grating to sensor)
         self.f = focal_length_mm
+        
+        # delta: Half of the total deviation angle between incident and diffracted beams
         self.delta = np.deg2rad(deviation_deg / 2.0)
+        
+        # gamma: Tilt angle of the CCD sensor relative to the focal plane normal
         self.gamma = np.deg2rad(sensor_tilt_deg)
+        
+        # pixel_stride: Physical distance between adjacent pixels on the sensor
         self.pixel_stride = pixel_stride_um * 1e-3  # convert um to mm
         
         # Current state

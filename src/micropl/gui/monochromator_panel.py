@@ -1,5 +1,5 @@
 """
-Monochromator panel for controlling the Horiba FHR640.
+Monochromator panel for controlling Horiba Monochromators.
 """
 
 import logging
@@ -7,7 +7,7 @@ import threading
 from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QGroupBox, QDoubleSpinBox, QSpinBox, QComboBox,
-    QGridLayout, QFrame, Qt, QTimer, pyqtSlot,
+    QGridLayout, QFrame, Qt, QTimer, pyqtSlot, pyqtSignal,
     QApplication, QMessageBox
 )
 
@@ -19,37 +19,38 @@ logger = logging.getLogger(__name__)
 
 
 class MonochromatorPanel(QWidget):
-    """Widget for controlling FHR640 monochromator parameters."""
-
+    """Widget for controlling the active monochromator's parameters."""
+    sig_status_changed = pyqtSignal(str)
+    
     def __init__(self):
         super().__init__()
         self.hw = HardwareManager()
         self.current_unit = "nm"
         
-        # Load defaults from config
-        mono_config = self.hw.config.get('hardware', {}).get('fhr640', {})
+        # Load defaults from active monochromator config
+        mono_id = self.hw.active_monochromator_id
+        mono_config = self.hw.get_monochromator_config(mono_id) if mono_id else {}
+        
+        self.display_name = mono_config.get('name', 'Monochromator')
         self._last_move_val = float(mono_config.get('center_wavelength', 500.0))
         self._last_move_unit = "nm"
         self._last_ent_slit_val = int(mono_config.get('slit_width', 100))
         self._last_exit_slit_val = int(mono_config.get('slit_width', 100))
-        self._last_grating_val = int(mono_config.get('grating', 1200))
+        
+        gratings = mono_config.get('gratings', [600, 1200, 1800])
+        g_idx = int(mono_config.get('grating_idx', 1))
+        self._last_grating_val = gratings[g_idx] if g_idx < len(gratings) else (gratings[0] if gratings else 1200)
         
         self._was_connected = False
-        self._connecting = False # Guard flag for long connection/homing cycles
+        self._connecting = False 
+        self.setMinimumWidth(340)
         self._init_ui()
 
     def _init_ui(self):
         """Initialize the user interface."""
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(layout)
-
-        # Main Group Box
-        group = QGroupBox("Monochromator")
-        group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        grid = QGridLayout()
+        grid = QGridLayout(self)
+        grid.setContentsMargins(10, 10, 10, 10)
         grid.setSpacing(5)
-        group.setLayout(grid)
 
         row = 0
         # 1. Header: Position and Status
@@ -83,30 +84,32 @@ class MonochromatorPanel(QWidget):
         self.pos_spin.setRange(0, 100000)
         self.pos_spin.setValue(500.0)
         self.pos_spin.setDecimals(3)
-        self.pos_spin.setFixedWidth(90)
+        self.pos_spin.setMinimumWidth(80)
         pos_ctrl_layout.addWidget(self.pos_spin)
 
         self.unit_combo = QComboBox()
         self.unit_combo.addItems(["nm", "meV", "cm⁻¹"])
-        self.unit_combo.setFixedWidth(65)
+        self.unit_combo.setMinimumWidth(60)
         self.unit_combo.currentIndexChanged.connect(self._on_unit_changed)
         pos_ctrl_layout.addWidget(self.unit_combo)
         
         pos_ctrl_layout.addStretch()
         
         pos_ctrl_layout.addWidget(QLabel("Grating:"))
-        mono_config = self.hw.config.get('hardware', {}).get('fhr640', {})
+        mono_id = self.hw.active_monochromator_id
+        mono_config = self.hw.get_monochromator_config(mono_id)
+        
         self.grating_combo = QComboBox()
-        self.grating_combo.addItems(["600", "1200", "1800"])
+        gratings = mono_config.get('gratings', [600, 1200, 1800])
+        self.grating_combo.addItems([str(g) for g in gratings])
         self.grating_combo.setFixedWidth(60)
         
         self.grating_combo.blockSignals(True)
-        default_grating = str(mono_config.get('grating', "1200"))
-        index = self.grating_combo.findText(default_grating)
-        if index >= 0:
-            self.grating_combo.setCurrentIndex(index)
+        g_idx = int(mono_config.get('grating_idx', 1))
+        if g_idx < self.grating_combo.count():
+            self.grating_combo.setCurrentIndex(g_idx)
         else:
-            self.grating_combo.setCurrentText("1200")
+            self.grating_combo.setCurrentIndex(0)
         self.grating_combo.blockSignals(False)
 
         pos_ctrl_layout.addWidget(self.grating_combo)
@@ -164,35 +167,7 @@ class MonochromatorPanel(QWidget):
         grid.addLayout(mirror_layout, row, 1)
 
         row += 1
-        # 6. Footer: Device info and Status
-        footer_layout = QHBoxLayout()
-        self.device_info_label = QLabel("Device: ---")
-        self.device_info_label.setStyleSheet("color: gray; font-size: 10px;")
-        footer_layout.addWidget(self.device_info_label)
-        
-        footer_layout.addStretch()
-        
-        self.status_label = QLabel("Disconnected")
-        self.status_label.setStyleSheet("color: red; font-size: 10px;")
-        footer_layout.addWidget(self.status_label)
-        
-        button_layout = QVBoxLayout()
-        button_layout.setSpacing(2)
-        
-        self.connect_btn = QPushButton("Connect")
-        self.connect_btn.setFixedWidth(65)
-        self.connect_btn.setStyleSheet("font-size: 10px; height: 16px; padding: 0px;")
-        self.connect_btn.clicked.connect(self._on_connect_clicked)
-        button_layout.addWidget(self.connect_btn)
-        
-        footer_layout.addLayout(button_layout)
-        
-        grid.addLayout(footer_layout, row, 0, 1, 2)
-
-        layout.addWidget(group)
-        layout.addStretch()
-
-        # Connect Move on input
+        row += 1        # Connect Move on input
         self.pos_spin.editingFinished.connect(self._on_target_input_finished)
 
         # Connect Slit changes
@@ -219,6 +194,10 @@ class MonochromatorPanel(QWidget):
         self._update_controls_enabled(False)
 
         logger.info("Monochromator panel initialized (Signal-driven)")
+
+        # Disable focus for all buttons to prevent scroll-jumping
+        for btn in self.findChildren(QPushButton):
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
     def _update_controls_enabled(self, enabled: bool):
         """Enable or disable input controls."""
@@ -260,32 +239,16 @@ class MonochromatorPanel(QWidget):
             return
             
         if is_conn:
-            self.status_label.setText("Connected")
-            self.status_label.setStyleSheet("color: green; font-size: 10px;")
-            self.connect_btn.setEnabled(False)
-            self.connect_btn.setVisible(True)
+            self.sig_status_changed.emit("Connected")
             self._update_controls_enabled(True)
             
             # If just connected, read parameters and device info
             if not self._was_connected:
-                try:
-                    mono = self.hw.mono
-                    if mono:
-                        info = mono.get_info()
-                        model = info.get('model', 'FHR640')
-                        port = info.get('port', '---')
-                        self.device_info_label.setText(f"Device: {model} (Port: {port})")
-                        self._was_connected = True
-                except Exception as e:
-                    logger.debug(f"Failed to read mono metadata: {e}")
+                self._was_connected = True
         else:
-            self.status_label.setText("Disconnected")
-            self.status_label.setStyleSheet("color: red; font-size: 10px;")
-            self.connect_btn.setEnabled(True)
-            self.connect_btn.setVisible(True)
-            self._update_controls_enabled(False)
+            self.sig_status_changed.emit("Disconnected")
             self.curr_pos_label.setText("---")
-            self.device_info_label.setText("Device: ---")
+            self._update_controls_enabled(False)
             self._was_connected = False
 
     def _on_connect_clicked(self):
@@ -295,17 +258,16 @@ class MonochromatorPanel(QWidget):
         mono = self.hw.mono
         if not mono:
             try:
-                mono = self.hw.initialize_instrument('mono', 'fhr640')
+                mono_id = self.hw.active_monochromator_id
+                mono_cfg = self.hw.get_monochromator_config(mono_id)
+                mono = self.hw.initialize_instrument(mono_id, mono_cfg.get('driver', 'horiba_serial'))
             except Exception as e:
                 QMessageBox.critical(self, "Hardware Error", f"Failed to initialize Monochromator driver:\n{e}")
                 return
 
-        self.status_label.setText("Homing...")
-        self.status_label.setStyleSheet("color: orange; font-size: 10px;")
-        self.connect_btn.setEnabled(False)
-        QApplication.processEvents() # Ensure UI reflects status during homing
-        
         self._connecting = True
+        self.sig_status_changed.emit("Homing...")
+        QApplication.processEvents() # Ensure UI reflects status during homing
         
         # Capture current UI targets before thread starts
         target_wl = self.pos_spin.value()
@@ -318,15 +280,16 @@ class MonochromatorPanel(QWidget):
                 logger.info("Monochromator connected and homed via individual panel button")
                 
                 # Apply defaults after homing to ensure hardware matches UI/Config
-                mono_config = self.hw.config.get('hardware', {}).get('fhr640', {})
+                mono_id = self.hw.active_monochromator_id
+                mono_config = self.hw.get_monochromator_config(mono_id)
                 default_wl = float(mono_config.get('center_wavelength', 500.0))
                 default_slit = float(mono_config.get('slit_width', 100.0))
-                default_grating = int(mono_config.get('grating', 1200))
+                default_grating_idx = int(mono_config.get('grating_idx', 1))
                 
-                logger.info(f"Applying targets post-homing: {default_grating} grating, {target_wl} {target_unit}, {default_slit} um slits")
+                logger.info(f"Applying targets post-homing: Index {default_grating_idx} grating, {target_wl} {target_unit}, {default_slit} um slits")
                 try:
                     # Set grating BEFORE wavelength for better firmware consistency
-                    mono.set_grating_by_density(default_grating)
+                    mono.set_grating(default_grating_idx)
                     mono.set_spectral_position(target_wl, target_unit)
                     mono.set_slit_width(default_slit, slit_id=0)
                     mono.set_slit_width(default_slit, slit_id=2)
@@ -525,3 +488,11 @@ class MonochromatorPanel(QWidget):
                     logger.error(f"Failed to set mirror: {e}")
             
             threading.Thread(target=_set_mirror, daemon=True).start()
+    def get_current_status(self) -> str:
+        """Return a string representing the current connection/operational status."""
+        mono = self.hw.get_instrument('mono')
+        if not mono or not mono.is_connected():
+            return "Disconnected"
+        if self._connecting:
+            return "Connecting"
+        return "Connected"

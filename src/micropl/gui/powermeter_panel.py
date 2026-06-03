@@ -7,7 +7,7 @@ from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QGroupBox, QDoubleSpinBox, QGridLayout, 
     QFrame, Qt, QTimer, pyqtSlot, QDialog, QDialogButtonBox,
-    QApplication
+    QApplication, pyqtSignal
 )
 
 from ..hardware.manager import HardwareManager
@@ -141,10 +141,12 @@ class PowerTraceWindow(QDialog):
 
 class PowerMeterPanel(QWidget):
     """Widget for power meter control and display."""
-
+    sig_status_changed = pyqtSignal(str)
+    
     def __init__(self):
         super().__init__()
         self.hw = HardwareManager()
+        self.setMinimumWidth(340)
         self._connecting = False # Guard flag
         self._init_ui()
         
@@ -172,15 +174,9 @@ class PowerMeterPanel(QWidget):
 
     def _init_ui(self):
         """Initialize the user interface."""
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(layout)
-
-        group = QGroupBox("Power Meter")
-        group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        group_layout = QGridLayout()
+        group_layout = QGridLayout(self)
+        group_layout.setContentsMargins(10, 10, 10, 10)
         group_layout.setSpacing(5)
-        group.setLayout(group_layout)
 
         row = 0
         # 1. Power and Status (Header row)
@@ -220,7 +216,7 @@ class PowerMeterPanel(QWidget):
         default_wl = self.hw.config.get('hardware', {}).get('pm100', {}).get('wavelength', 750.0)
         self.wave_spin.setValue(float(default_wl))
         
-        self.wave_spin.setFixedWidth(80)
+        self.wave_spin.setMinimumWidth(70)
         self.wave_spin.editingFinished.connect(self._on_wavelength_changed)
         wave_layout.addWidget(self.wave_spin)
         wave_layout.addWidget(QLabel("nm"))
@@ -233,7 +229,7 @@ class PowerMeterPanel(QWidget):
         
         default_beam = self.hw.config.get('hardware', {}).get('pm100', {}).get('beam_diameter', 3.0)
         self.beam_spin.setValue(float(default_beam))
-        self.beam_spin.setFixedWidth(65)
+        self.beam_spin.setMinimumWidth(55)
         self.beam_spin.editingFinished.connect(self._on_beam_diameter_changed)
         wave_layout.addWidget(self.beam_spin)
         wave_layout.addWidget(QLabel("mm"))
@@ -263,28 +259,10 @@ class PowerMeterPanel(QWidget):
         group_layout.addLayout(ctrl_layout, row, 0, 1, 2)
 
         row += 1
-        # 4. Footer: Sensor Info and Status
-        footer_layout = QHBoxLayout()
-        self.sensor_label = QLabel("Sensor: ---")
-        self.sensor_label.setStyleSheet("color: gray; font-size: 10px;")
-        footer_layout.addWidget(self.sensor_label)
-        
-        footer_layout.addStretch()
-        
-        self.status_label = QLabel("Disconnected")
-        self.status_label.setStyleSheet("color: red; font-size: 10px;")
-        footer_layout.addWidget(self.status_label)
-        
-        self.connect_btn = QPushButton("Connect")
-        self.connect_btn.setFixedWidth(55)
-        self.connect_btn.setStyleSheet("font-size: 10px; height: 16px; padding: 0px;")
-        self.connect_btn.clicked.connect(self._on_connect_clicked)
-        footer_layout.addWidget(self.connect_btn)
-        
-        group_layout.addLayout(footer_layout, row, 0, 1, 2)
 
-        layout.addWidget(group)
-        layout.addStretch()
+        # Disable focus for all buttons to prevent scroll-jumping
+        for btn in self.findChildren(QPushButton):
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
     @pyqtSlot(float)
     def _on_power_ready(self, p_net):
@@ -304,17 +282,13 @@ class PowerMeterPanel(QWidget):
             return
             
         if status == "Sensor Disconnected":
-            self.status_label.setText("Sensor Disconnected")
-            self.status_label.setStyleSheet("color: orange; font-size: 10px;")
+            self.sig_status_changed.emit("Sensor Disconnected")
             self.power_label.setText("---")
             self._update_controls_enabled(True)
             return
 
         if is_conn:
-            self.status_label.setText("Connected")
-            self.status_label.setStyleSheet("color: green; font-size: 10px;")
-            self.connect_btn.setEnabled(False)
-            self.connect_btn.setVisible(True)
+            self.sig_status_changed.emit("Connected")
             
             # Enable controls
             self._update_controls_enabled(True)
@@ -325,20 +299,12 @@ class PowerMeterPanel(QWidget):
                     pm = self.hw.get_instrument('pm100')
                     if pm:
                         self._sync_hardware_params()
-                        info = pm.get_info()
-                        model = info.get('sensor_model', 'Unknown')
-                        sn = info.get('sensor_sn', '---')
-                        self.sensor_label.setText(f"Sensor: {model} (S/N: {sn})")
                         self._was_connected = True
                 except Exception as e:
                     logger.debug(f"Failed to read pm metadata: {e}")
         else:
             self.power_label.setText("---")
-            self.status_label.setText("Disconnected")
-            self.status_label.setStyleSheet("color: red; font-size: 10px;")
-            self.connect_btn.setEnabled(True)
-            self.connect_btn.setVisible(True)
-            self.sensor_label.setText("Sensor: ---")
+            self.sig_status_changed.emit("Disconnected")
             
             # Disable controls
             self._update_controls_enabled(False)
@@ -378,20 +344,14 @@ class PowerMeterPanel(QWidget):
                 return
 
         try:
-            self.status_label.setText("Connecting...")
-            self.status_label.setStyleSheet("color: orange; font-size: 10px;")
-            self.connect_btn.setEnabled(False)
-            self.status_label.setText("Connecting...")
-            self.status_label.setStyleSheet("color: orange; font-size: 10px;")
-            QApplication.processEvents()
-            
             self._connecting = True
+            self.sig_status_changed.emit("Connecting...")
+            QApplication.processEvents()
             try:
                 pm.connect()
                 logger.info("Power meter connected via panel button")
             finally:
                 self._connecting = False
-                self.connect_btn.setEnabled(True)
         except Exception as e:
             logger.error(f"Failed to connect Power Meter: {e}")
             QMessageBox.critical(self, "Connection Failed", f"Could not connect to Power Meter:\n{e}")
@@ -467,3 +427,13 @@ class PowerMeterPanel(QWidget):
             except Exception:
                 pass
 
+    def get_current_status(self) -> str:
+        """Return a string representing the current connection/operational status."""
+        pm = self.hw.get_instrument('pm100')
+        if not pm or not pm.is_connected():
+            return "Disconnected"
+        if not pm.is_sensor_connected():
+            return "Sensor Disconnected"
+        if self._connecting:
+            return "Connecting"
+        return "Connected"

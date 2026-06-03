@@ -3,7 +3,7 @@ Plot widgets for high-performance data visualization using PyQtGraph.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List, Tuple
 import numpy as np
 
 from ..qt import (
@@ -332,7 +332,7 @@ class ImagePlotWidget(QWidget):
         
         if self._first_frame:
             self._first_frame = False
-            self.imv.setPredefinedGradient('grey')
+            self.imv.setPredefinedGradient('inferno')
             self.imv.getView().invertY(False) 
 
     def set_labels(self, xlabel: str, ylabel: str):
@@ -464,3 +464,187 @@ class CoordinateWidget(QFrame):
     def clear(self):
         """Force clear the coordinates."""
         self.set_coords(np.nan, np.nan)
+
+
+class SpatialMapWidget(QWidget):
+    """Widget for displaying 2D spatial scatter plot of measurements using PyQtGraph."""
+
+    sigPointHovered = pyqtSignal(dict)
+    sigPointClicked = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bg_overlay = None
+        self._highlight_item = None
+        self._points_data = []
+        self._selected_index = -1
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+
+        self.pw = pg.PlotWidget()
+        layout.addWidget(self.pw)
+
+        self._plot_item = self.pw.getPlotItem()
+        self._plot_item.showGrid(x=True, y=True, alpha=0.3)
+        self._plot_item.setAspectLocked(True) # Keep 1:1 spatial aspect ratio (wafer physical dimensions)
+
+        # Style the plot for a premium look
+        self._plot_item.getAxis('left').setPen(pg.mkPen(color='w', width=1))
+        self._plot_item.getAxis('bottom').setPen(pg.mkPen(color='w', width=1))
+        self._plot_item.setLabel('bottom', "X Position (mm)")
+        self._plot_item.setLabel('left', "Y Position (mm)")
+
+        # Create ScatterPlotItem
+        self.scatter = pg.ScatterPlotItem(
+            size=14, 
+            pen=pg.mkPen(width=1, color='w'), 
+            hoverable=True,
+            tip=None # Disable default hover tooltip to use our info label
+        )
+        self.pw.addItem(self.scatter)
+
+        # Create ColorBarItem and add to plot layout
+        self.colorbar = pg.ColorBarItem(width=15)
+        self._plot_item.layout.addItem(self.colorbar, 2, 4)
+        self.colorbar.setVisible(False)
+
+        # Connect signals
+        self.scatter.sigClicked.connect(self._on_scatter_clicked)
+        self.scatter.sigHovered.connect(self._on_scatter_hovered)
+
+    def _on_scatter_clicked(self, scatter, points, ev):
+        if points:
+            spot = points[0]
+            data = spot.data()
+            if data:
+                self._selected_index = data.get('index', -1)
+                self.sigPointClicked.emit(data)
+                self._draw_highlight(data['x'], data['y'])
+
+    def _on_scatter_hovered(self, scatter, points, ev):
+        if points:
+            spot = points[0]
+            data = spot.data()
+            if data:
+                self.sigPointHovered.emit(data)
+        else:
+            self.sigPointHovered.emit({})
+
+    def draw_background_shape(self, shape_type: str, x_start: float, x_end: float, y_start: float, y_end: float, diameter: float):
+        """Draw circular or rectangular scan boundary overlay behind points."""
+        self.remove_background_shape()
+
+        pen = pg.QtGui.QPen(pg.QtGui.QColor(74, 158, 255, 180), 1.5, pg.QtCore.Qt.PenStyle.DashLine)
+        brush = pg.QtGui.QBrush(pg.QtGui.QColor(0, 80, 180, 20))
+
+        if shape_type.lower() == "circle" or "circle" in shape_type.lower():
+            cx = (x_start + x_end) / 2.0
+            cy = (y_start + y_end) / 2.0
+            r = diameter / 2.0
+            self._bg_overlay = pg.QtWidgets.QGraphicsEllipseItem(cx - r, cy - r, diameter, diameter)
+        else:
+            x_min = min(x_start, x_end)
+            y_min = min(y_start, y_end)
+            dx = abs(x_end - x_start)
+            dy = abs(y_end - y_start)
+            self._bg_overlay = pg.QtWidgets.QGraphicsRectItem(x_min, y_min, dx, dy)
+
+        self._bg_overlay.setPen(pen)
+        self._bg_overlay.setBrush(brush)
+        self._bg_overlay.setZValue(-100) # Draw behind the scatter points
+        self.pw.addItem(self._bg_overlay)
+
+    def remove_background_shape(self):
+        """Remove background shape overlay if it exists."""
+        if self._bg_overlay is not None:
+            self.pw.removeItem(self._bg_overlay)
+            self._bg_overlay = None
+
+    def _draw_highlight(self, x: float, y: float):
+        """Highlight the selected point with a yellow border circle."""
+        self.remove_highlight()
+        
+        # Spot size is 14. We draw a circle of size 1.4 mm centered on (x,y)
+        self._highlight_item = pg.QtWidgets.QGraphicsEllipseItem(x - 0.7, y - 0.7, 1.4, 1.4)
+        pen = pg.QtGui.QPen(pg.QtGui.QColor("#ffff00"), 2)
+        self._highlight_item.setPen(pen)
+        self._highlight_item.setZValue(100) # Draw on top
+        self.pw.addItem(self._highlight_item)
+
+    def remove_highlight(self):
+        """Remove selection highlight item."""
+        if self._highlight_item is not None:
+            self.pw.removeItem(self._highlight_item)
+            self._highlight_item = None
+
+    def update_points(self, points_data: List[dict], selected_index: int, metric: str, colormap_name: str,
+                      auto_scale: bool = True, min_val: Optional[float] = None, max_val: Optional[float] = None):
+        """
+        Update scatter plot spots colored dynamically by metric and colormap.
+        points_data: List of dicts, each having {'x', 'y', 'peak_wavelength', 'peak_intensity', 'integrated_intensity', 'index'}
+        """
+        self._points_data = points_data
+        self._selected_index = selected_index
+
+        if not points_data:
+            self.scatter.clear()
+            self.remove_highlight()
+            self.colorbar.setVisible(False)
+            return
+
+        # Extract values for color mapping
+        values = np.array([p[metric] for p in points_data])
+        
+        # Calculate auto-limits if requested or if manual limits are not set
+        if auto_scale or min_val is None or max_val is None:
+            min_val = np.min(values) if len(values) > 0 else 0.0
+            max_val = np.max(values) if len(values) > 0 else 1.0
+
+        try:
+            cmap = pg.colormap.get(colormap_name)
+        except:
+            cmap = pg.colormap.get('viridis')
+
+        # Clip values to the custom range to avoid normalization going out of bounds
+        clipped_values = np.clip(values, min_val, max_val)
+
+        # Normalize and map to QColors
+        if max_val != min_val:
+            normalized = (clipped_values - min_val) / (max_val - min_val)
+        else:
+            normalized = np.ones_like(values) * 0.5
+
+        spots = []
+        for p, norm_val in zip(points_data, normalized):
+            color = cmap.mapToQColor(norm_val)
+            spots.append({
+                'pos': (p['x'], p['y']),
+                'brush': pg.QtGui.QBrush(color),
+                'data': p
+            })
+
+        self.scatter.setData(spots)
+
+        # Update and show colorbar map and levels
+        self.colorbar.setColorMap(cmap)
+        self.colorbar.setLevels((min_val, max_val))
+        self.colorbar.setVisible(True)
+
+        # Re-draw highlight if a valid point is selected
+        self.remove_highlight()
+        if 0 <= selected_index < len(points_data):
+            sel_pt = points_data[selected_index]
+            self._draw_highlight(sel_pt['x'], sel_pt['y'])
+
+    def clear(self):
+        """Clear all spots, highlights, and overlays."""
+        self.scatter.clear()
+        self.remove_background_shape()
+        self.remove_highlight()
+        self.colorbar.setVisible(False)
+        self._points_data = []
+        self._selected_index = -1

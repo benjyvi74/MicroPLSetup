@@ -93,10 +93,11 @@ if PYSIDE:
         QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen
+        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
+        QScrollArea, QToolButton
     )
-    from PySide6.QtCore import QTimer, QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, Qt
-    from PySide6.QtGui import QAction, QImage, QPixmap
+    from PySide6.QtCore import QTimer, QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, Qt, QSize
+    from PySide6.QtGui import QAction, QImage, QPixmap, QIcon
 else:
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -105,10 +106,11 @@ else:
         QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen
+        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
+        QScrollArea, QToolButton
     )
-    from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt
-    from PyQt6.QtGui import QAction, QImage, QPixmap
+    from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt, QSize
+    from PyQt6.QtGui import QAction, QImage, QPixmap, QIcon
 
 # Manual exports
 QApplication = QtWidgets.QApplication
@@ -154,3 +156,13 @@ QListWidget = QtWidgets.QListWidget
 QListWidgetItem = QtWidgets.QListWidgetItem
 QSplashScreen = QtWidgets.QSplashScreen
 QSizePolicy = QtWidgets.QSizePolicy
+QScrollArea = QtWidgets.QScrollArea
+QToolButton = QtWidgets.QToolButton
+
+# Explicit exports for IDE linters
+pyqtSignal = pyqtSignal
+pyqtSlot = pyqtSlot
+Qt = Qt
+QAction = QAction
+QIcon = QtGui.QIcon
+QSize = QtCore.QSize

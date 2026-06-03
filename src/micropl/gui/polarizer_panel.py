@@ -52,7 +52,7 @@ class PowerSeeker(QThread):
         return sum(readings) / len(readings)
 
     def run(self):
-        kdc = self.hw.kdc101
+        kdc = self.hw.polarizer
         pm = self.hw.get_instrument('pm100')
         
         if not kdc or not kdc.is_connected():
@@ -178,12 +178,17 @@ class KDC101SettingsDialog(QDialog):
         }
 
 
-class KDC101Panel(QWidget):
-    """Widget for KDC101 motor controller (optimized for PRM1Z8 rotation)."""
-
+class PolarizerPanel(QWidget):
+    """
+    Dedicated control panel for the Thorlabs KDC101 Polarizer.
+    Provides angle control and iterative power-seeking automation.
+    """
+    sig_status_changed = pyqtSignal(str)
+    
     def __init__(self):
         super().__init__()
         self.hw = HardwareManager()
+        self.setMinimumWidth(340)
         self._params = {
             'velocity': 1.0, 'acceleration': 1.0
         }
@@ -194,7 +199,6 @@ class KDC101Panel(QWidget):
         service = self.hw.service
         service.kdc_pos_changed.connect(self._on_pos_changed)
         service.kdc_status_changed.connect(self._on_status_changed)
-        service.shutter_changed.connect(self._on_shutter_changed)
         
         # Internal state
         self._was_connected = False
@@ -204,21 +208,17 @@ class KDC101Panel(QWidget):
         # Initially disable all controls
         self._update_controls_enabled(False)
         
-        logger.info("KDC101 panel initialized (Signal-driven with auto-move)")
+        logger.info("Polarizer panel initialized (Signal-driven with auto-move)")
 
     def _init_ui(self):
         """Initialize the user interface."""
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(layout)
-
-        # Main Group
-        group = QGroupBox("Polarizer Control")
-        group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(10, 10, 10, 10)
+        
         group_layout = QGridLayout()
-        group_layout.setSpacing(5) # Restored spacing
-        # removed setContentsMargins to restore default
-        group.setLayout(group_layout)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(5)
+        self.layout().addLayout(group_layout)
 
         row = 0
         # 1. Status and Position (Combined)
@@ -255,161 +255,110 @@ class KDC101Panel(QWidget):
         group_layout.addWidget(line, row, 0, 1, 2)
         
         row += 1
-        # 2. Target and Step Control (Combined on one line)
-        target_step_layout = QHBoxLayout()
-        
-        target_step_layout.addWidget(QLabel("Target:"))
+        # 2. Target Row: Target, Home, Stop
+        target_layout = QHBoxLayout()
+        target_layout.addWidget(QLabel("Target:"))
         self.target_spin = QDoubleSpinBox()
         self.target_spin.setRange(-360, 360)
         self.target_spin.setDecimals(3)
-        self.target_spin.setFixedWidth(80) # Restored width
+        self.target_spin.setMinimumWidth(70)
         self.target_spin.editingFinished.connect(self._on_move_triggered)
-        target_step_layout.addWidget(self.target_spin)
-        target_step_layout.addWidget(QLabel("°"))
+        target_layout.addWidget(self.target_spin)
+        target_layout.addWidget(QLabel("°"))
         
-        target_step_layout.addStretch()
+        target_layout.addStretch()
         
-        target_step_layout.addWidget(QLabel("Step:"))
+        # Home Button
+        self.home_btn = QPushButton("⌂")
+        self.home_btn.setFixedSize(26, 22)
+        self.home_btn.setStyleSheet("font-size: 18px; color: #007bff; font-family: 'Segoe UI Symbol', 'Arial'; padding: -2px;")
+        self.home_btn.clicked.connect(self._on_home_clicked)
+        target_layout.addWidget(self.home_btn)
+        
+        # Stop Button
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setFixedSize(80, 22)
+        self.stop_btn.clicked.connect(self._on_stop_clicked)
+        self.stop_btn.setStyleSheet("""
+            QPushButton { color: #dc3545; font-weight: bold; }
+            QPushButton:disabled { color: gray; }
+        """)
+        target_layout.addWidget(self.stop_btn)
+        group_layout.addLayout(target_layout, row, 0, 1, 2)
+        
+        row += 1
+        # 3. Step Row: Step, buttons
+        step_row_layout = QHBoxLayout()
+        step_row_layout.addWidget(QLabel("Step:  ")) # Added spaces for alignment
         self.step_spin = QDoubleSpinBox()
         self.step_spin.setRange(0.001, 360)
         self.step_spin.setValue(1.0)
         self.step_spin.setDecimals(3)
-        self.step_spin.setFixedWidth(70)
-        target_step_layout.addWidget(self.step_spin)
-        target_step_layout.addWidget(QLabel("°"))
+        self.step_spin.setMinimumWidth(70)
+        step_row_layout.addWidget(self.step_spin)
+        step_row_layout.addWidget(QLabel("°"))
         
-        # Add buttons with zero extra spacing
         self.step_back_btn = QPushButton("-")
-        self.step_back_btn.setFixedWidth(25)
+        self.step_back_btn.setFixedSize(26, 22)
         self.step_back_btn.clicked.connect(lambda: self._on_step_clicked(-1))
         
         self.step_fwd_btn = QPushButton("+")
-        self.step_fwd_btn.setFixedWidth(25)
+        self.step_fwd_btn.setFixedSize(26, 22)
         self.step_fwd_btn.clicked.connect(lambda: self._on_step_clicked(1))
         
-        target_step_layout.addWidget(self.step_back_btn)
-        target_step_layout.addWidget(self.step_fwd_btn)
+        step_row_layout.addSpacing(5)
+        step_row_layout.addWidget(self.step_back_btn)
+        step_row_layout.addWidget(self.step_fwd_btn)
+        step_row_layout.addStretch()
         
-        group_layout.addLayout(target_step_layout, row, 0, 1, 2)
+        group_layout.addLayout(step_row_layout, row, 0, 1, 2)
         
         row += 1
-        # Separator (Between Target and Power Target)
+        # Separator
         line_sep = QFrame()
         line_sep.setFrameShape(QFrame.Shape.HLine)
         line_sep.setFrameShadow(QFrame.Shadow.Sunken)
         group_layout.addWidget(line_sep, row, 0, 1, 2)
         
         row += 1
-        # 3. Power Target (Renamed and anchored as requested)
+        # 4. Power Target Row
         p_target_row_layout = QHBoxLayout()
-        
         p_target_row_layout.addWidget(QLabel("Power Target:"))
         self.p_target_spin = QDoubleSpinBox()
         self.p_target_spin.setRange(0, 1000)
         self.p_target_spin.setDecimals(2)
-        self.p_target_spin.setFixedWidth(80)
+        self.p_target_spin.setMinimumWidth(70)
         p_target_row_layout.addWidget(self.p_target_spin)
         
         self.p_unit_combo = QComboBox()
         self.p_unit_combo.addItems(["nW", "µW", "mW"])
         self.p_unit_combo.setCurrentText("µW")
-        self.p_unit_combo.setFixedWidth(60)
+        self.p_unit_combo.setMinimumWidth(55)
         p_target_row_layout.addWidget(self.p_unit_combo)
         
         self.seek_btn = QPushButton("Seek")
-        self.seek_btn.setFixedWidth(60)
+        self.seek_btn.setMinimumWidth(55)
         self.seek_btn.clicked.connect(self._on_seek_clicked)
         p_target_row_layout.addWidget(self.seek_btn)
-        
         p_target_row_layout.addStretch()
         
         group_layout.addLayout(p_target_row_layout, row, 0, 1, 2)
  
         row += 1
-        # 4. Parameters & Stop
-        action_layout = QHBoxLayout()
-        action_layout.setSpacing(10)
-        
+        # 5. Parameters (Bottom)
         self.param_btn = QPushButton("Parameters")
         self.param_btn.clicked.connect(self._on_parameters_clicked)
-        action_layout.addWidget(self.param_btn, 1) # Expand equally
-        
-        self.stop_btn = QPushButton("Stop")
-        self.stop_btn.clicked.connect(self._on_stop_clicked)
-        self.stop_btn.setStyleSheet("""
-            QPushButton { color: red; }
-            QPushButton:disabled { color: gray; }
-        """)
-        action_layout.addWidget(self.stop_btn, 1) # Expand equally
-        
-        group_layout.addLayout(action_layout, row, 0, 1, 2)
+        group_layout.addWidget(self.param_btn, row, 0, 1, 2)
 
         row += 1
-        # Separator (Between Actions and Shutter)
-        line_shutter = QFrame()
-        line_shutter.setFrameShape(QFrame.Shape.HLine)
-        line_shutter.setFrameShadow(QFrame.Shadow.Sunken)
-        group_layout.addWidget(line_shutter, row, 0, 1, 2)
- 
-        row += 1
-        # 5. Shutter (Newly Merged)
-        shutter_layout = QHBoxLayout()
-        shutter_layout.addWidget(QLabel("Shutter:"))
-        
-        self.shutter_btn_group = QButtonGroup(self)
-        self.shutter_btn_group.setExclusive(True)
-        
-        self.shutter_open_btn = QPushButton("OPEN")
-        self.shutter_open_btn.setCheckable(True)
-        self.shutter_open_btn.setStyleSheet("""
-            QPushButton:checked { background-color: #2ecc71; color: white; font-weight: bold; }
-            QPushButton:disabled { background-color: #bdc3c7; color: #7f8c8d; }
-            QPushButton { min-height: 24px; }
-        """)
-        self.shutter_open_btn.clicked.connect(lambda: self._set_shutter(True))
-        
-        self.shutter_close_btn = QPushButton("CLOSE")
-        self.shutter_close_btn.setCheckable(True)
-        self.shutter_close_btn.setStyleSheet("""
-            QPushButton:checked { background-color: #e74c3c; color: white; font-weight: bold; }
-            QPushButton:disabled { background-color: #bdc3c7; color: #7f8c8d; }
-            QPushButton { min-height: 24px; }
-        """)
-        self.shutter_close_btn.clicked.connect(lambda: self._set_shutter(False))
-        
-        self.shutter_btn_group.addButton(self.shutter_open_btn)
-        self.shutter_btn_group.addButton(self.shutter_close_btn)
-        self.shutter_close_btn.setChecked(True)
-        
-        shutter_layout.addWidget(self.shutter_open_btn)
-        shutter_layout.addWidget(self.shutter_close_btn)
-        group_layout.addLayout(shutter_layout, row, 0, 1, 2)
 
-        row += 1
-        row += 1
-        # 6. Footer: Device info and Status
-        footer_layout = QHBoxLayout()
-        self.device_info_label = QLabel("Device: ---")
-        self.device_info_label.setStyleSheet("color: gray; font-size: 10px;")
-        footer_layout.addWidget(self.device_info_label)
-        
-        footer_layout.addStretch()
-        
-        self.status_label = QLabel("Disconnected")
-        self.status_label.setStyleSheet("color: red; font-size: 10px;")
-        footer_layout.addWidget(self.status_label)
-        
-        self.connect_btn = QPushButton("Connect")
-        self.connect_btn.setFixedWidth(55)
-        self.connect_btn.setStyleSheet("font-size: 10px; height: 16px; padding: 0px;")
-        self.connect_btn.clicked.connect(self._on_connect_clicked)
-        footer_layout.addWidget(self.connect_btn)
-        
-        group_layout.addLayout(footer_layout, row, 0, 1, 2)
+        # Disable focus for all buttons to prevent scroll-jumping
+        for btn in self.findChildren(QPushButton):
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            
+        # Final layout assembly
+        self.layout().addStretch()
 
-        layout.addWidget(group)
-        layout.addStretch()
-        
     def _update_controls_enabled(self, enabled: bool):
         """Enable or disable input controls."""
         self.target_spin.setEnabled(enabled)
@@ -421,8 +370,7 @@ class KDC101Panel(QWidget):
         self.seek_btn.setEnabled(enabled)
         self.param_btn.setEnabled(enabled)
         self.stop_btn.setEnabled(enabled)
-        self.shutter_open_btn.setEnabled(enabled)
-        self.shutter_close_btn.setEnabled(enabled)
+        self.home_btn.setEnabled(enabled)
 
     @pyqtSlot(float)
     def _on_pos_changed(self, pos):
@@ -444,11 +392,7 @@ class KDC101Panel(QWidget):
             
             # Status label
             if not (self._seeker and self._seeker.isRunning()):
-                self.status_label.setText("Connected")
-                self.status_label.setStyleSheet("color: green; font-size: 10px;")
-            
-            self.connect_btn.setEnabled(False)
-            self.connect_btn.setVisible(True)
+                self.sig_status_changed.emit("Connected")
             
             # Enable controls
             self._update_controls_enabled(True)
@@ -458,48 +402,36 @@ class KDC101Panel(QWidget):
                 # We still do these one-off calls on the UI thread for now,
                 # but they only happen once on connection.
                 try:
-                    kdc = self.hw.kdc101
+                    kdc = self.hw.polarizer
                     if kdc:
                         self._read_hardware_params()
-                        info = kdc.get_info()
-                        model = info.get('model', 'KDC101')
-                        sn = info.get('serial_number', '---')
-                        self.device_info_label.setText(f"Device: {model} (S/N: {sn})")
                         self._was_connected = True
                 except Exception as e:
                     logger.debug(f"Failed to read one-off metadata: {e}")
         else:
-            self.status_label.setText("Disconnected")
-            self.status_label.setStyleSheet("color: red; font-size: 10px;")
-            self.connect_btn.setEnabled(True)
-            self.connect_btn.setVisible(True)
+            self.sig_status_changed.emit("Disconnected")
             self.pos_label.setText("---")
             self.moving_indicator.setStyleSheet("color: gray; font-size: 10px; font-weight: bold;")
-            self.device_info_label.setText("Device: ---")
             
             # Disable controls
             self._update_controls_enabled(False)
             self._was_connected = False
-            self.shutter_close_btn.setChecked(True) # Default visual on disconnect
 
     def _on_connect_clicked(self):
         """Try to connect to the KDC101."""
         from ..qt import QMessageBox
         
-        kdc = self.hw.kdc101
+        kdc = self.hw.polarizer
         if not kdc:
             try:
-                kdc = self.hw.initialize_instrument('kdc101', 'kdc101')
+                kdc = self.hw.initialize_instrument('polarizer', 'kdc101')
             except Exception as e:
-                QMessageBox.critical(self, "Hardware Error", f"Failed to initialize KDC101 driver:\n{e}")
+                QMessageBox.critical(self, "Hardware Error", f"Failed to initialize polarizer driver:\n{e}")
                 return
 
-        self.connect_btn.setEnabled(False)
-        self.status_label.setText("Connecting...")
-        self.status_label.setStyleSheet("color: orange; font-size: 10px;")
-        QApplication.processEvents()
-        
         self._connecting = True
+        self.sig_status_changed.emit("Connecting...")
+        QApplication.processEvents()
         def _connect_thread():
             try:
                 kdc.connect()
@@ -509,13 +441,12 @@ class KDC101Panel(QWidget):
                 # Similar to mono, we let the service handle status reporting
             finally:
                 self._connecting = False
-                QTimer.singleShot(0, lambda: self.connect_btn.setEnabled(True))
         
         threading.Thread(target=_connect_thread, daemon=True).start()
 
     def _read_hardware_params(self):
         """Read current parameters from hardware."""
-        kdc = self.hw.kdc101
+        kdc = self.hw.polarizer
         if kdc and kdc.is_connected():
             try:
                 v_params = kdc.get_velocity_params()
@@ -538,7 +469,7 @@ class KDC101Panel(QWidget):
         dialog = KDC101SettingsDialog(self, self._params)
         if dialog.exec():
             new_params = dialog.get_values()
-            kdc = self.hw.kdc101
+            kdc = self.hw.polarizer
             if kdc:
                 try:
                     kdc.set_velocity(new_params['velocity'])
@@ -556,7 +487,7 @@ class KDC101Panel(QWidget):
         val = self.target_spin.value()
         
         # Only move if the device is connected
-        kdc = self.hw.kdc101
+        kdc = self.hw.polarizer
         if not kdc or not kdc.is_connected():
             return
 
@@ -578,7 +509,7 @@ class KDC101Panel(QWidget):
 
     def _on_step_clicked(self, direction: int):
         """Handle relative move."""
-        kdc = self.hw.kdc101
+        kdc = self.hw.polarizer
         if kdc:
             def _step():
                 try:
@@ -596,13 +527,31 @@ class KDC101Panel(QWidget):
             self._seeker.stop()
             logger.info("Power seeking aborted")
 
-        kdc = self.hw.kdc101
+        kdc = self.hw.polarizer
         if kdc:
             try:
                 kdc.stop()
                 logger.info("KDC101 stopped")
             except Exception as e:
                 logger.error(f"KDC101 stop failed: {e}")
+
+    def _on_home_clicked(self):
+        """Perform homing on polarizer."""
+        kdc = self.hw.polarizer
+        if not kdc or not kdc.is_connected():
+            return
+
+        self.sig_status_changed.emit("Homing...")
+        self.home_btn.setEnabled(False)
+        
+        def do_home():
+            try:
+                kdc.home()
+            finally:
+                self.sig_status_changed.emit(self.get_current_status())
+                self.home_btn.setEnabled(True)
+
+        threading.Thread(target=do_home, daemon=True).start()
 
     def _on_seek_clicked(self):
         """Start the power seeker worker."""
@@ -617,8 +566,7 @@ class KDC101Panel(QWidget):
         target_w = value * multipliers[unit]
 
         self.seek_btn.setText("Stop")
-        self.status_label.setText("Seeking...")
-        self.status_label.setStyleSheet("color: orange; font-size: 10px;")
+        self.sig_status_changed.emit("Seeking...")
         
         self._seeker = PowerSeeker(self.hw, target_w)
         self._seeker.finished.connect(self._on_seek_finished)
@@ -636,30 +584,44 @@ class KDC101Panel(QWidget):
         self.seek_btn.setText("Seek")
         if success:
             logger.info(f"Power seek successful: {message}")
-            self.status_label.setText("Target Reached")
-            self.status_label.setStyleSheet("color: green; font-size: 10px;")
+            self.sig_status_changed.emit("Target Reached")
         else:
             logger.warning(f"Power seek failed: {message}")
-            self.status_label.setText("Seek Failed")
-            self.status_label.setStyleSheet("color: red; font-size: 10px;")
+            self.sig_status_changed.emit("Seek Failed")
 
-    @pyqtSlot(bool)
-    def _on_shutter_changed(self, open_state: bool):
-        """Update shutter button state from hardware feedback."""
-        if open_state:
-            self.shutter_open_btn.setChecked(True)
-        else:
-            self.shutter_close_btn.setChecked(True)
+    def get_current_status(self) -> str:
+        """Return a string representing the current connection/operational status."""
+        if not self.hw.get_instrument('kdc101').is_connected():
+            return "Disconnected"
+        if self._connecting:
+            return "Connecting"
+        if self._seeker and self._seeker.isRunning():
+            return "Seeking"
+        return "Connected"
 
-    def _set_shutter(self, open: bool):
-        """Send shutter command to hardware."""
-        kdc = self.hw.kdc101
-        if kdc and kdc.is_connected():
-            try:
-                kdc.set_shutter(open)
-                logger.info(f"Shutter {'opened' if open else 'closed'}")
-            except Exception as e:
-                logger.error(f"Shutter command failed: {e}")
-                # Revert visual state
-                if open: self.shutter_close_btn.setChecked(True)
-                else: self.shutter_open_btn.setChecked(True)
+    def update_panel(self):
+        """Update UI from hardware state. Called periodically."""
+        kdc = self.hw.polarizer
+        if kdc:
+            is_connected = kdc.is_connected()
+            if is_connected and not self._connecting:
+                # Periodic position update if not moving/connecting
+                try:
+                    pos = kdc.get_position()
+                    self.pos_label.setText(f"{pos:.3f}")
+                except:
+                    pass
+            
+            self._update_ui_state(is_connected)
+            self.sig_status_changed.emit(self.get_current_status())
+
+    def get_current_status(self) -> str:
+        """Return a string representing the current connection/operational status."""
+        kdc = self.hw.polarizer
+        if not kdc or not kdc.is_connected():
+            return "Disconnected"
+        if self._connecting:
+            return "Connecting"
+        if self._seeker and self._seeker.isRunning():
+            return "Seeking"
+        return "Connected"

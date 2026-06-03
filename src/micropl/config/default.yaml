@@ -1,72 +1,193 @@
-# Default configuration for MicroPL setup
-# User-editable non-volatile settings
+# ==============================================================================
+# Micro-PL Setup Configuration
+# ==============================================================================
 
 hardware:
-  # Thorlabs KDC101 (motorized polarizer / TTL shutter)
-  kdc101:
-    serial_number: "27271777"
-    port: null
-    kinesis_path: "C:\\Program Files\\Thorlabs\\Kinesis"  # Path to Kinesis DLLs
-    # Motor parameters for unit conversions (default for PRM1-Z8 rotation mount)
-    steps_per_rev: 1919.64186
-    gbox_ratio: 1.0
-    pitch: 1.0
-    velocity: 25.0  # deg/s 
-    acceleration: 25.0  # deg/s²
-    zero_offset: 0.0  # deg
+  # Preconfigured default setup on startup
+  # Options: "IR micro PL - iDus Si", "IR micro PL - iDus InGaAs 1024", "IR micro PL - iDus InGaAs 512", "Macro PL"
+  default_setup: "IR micro PL - iDus Si"
 
-  # PM100 Power Meter
-  pm100:
-    port: "USB0::0x1313::0x8072::P2000083::INSTR"
-    wavelength: 750  # nm
-    range: auto
-    beam_diameter: 3.0  # mm
+  # ----------------------------------------------------------------------------
+  # Cameras
+  # ----------------------------------------------------------------------------
+  cameras:
+    - id: "camera_0"
+      name: "Andor Luca"
+      model: "Luc285_MONO"
+      driver: "andor_camera"
+      role: "visualisation"
+      camera_index: 0
+      serial_number: 1195
+      enabled: true
+      
+      # Sensor Specs
+      detector_size: [1004, 1002]
+      
+      # Acquisition Defaults
+      exposure_time: 0.1
+      temperature: -20
+      fan_mode: "full"
 
-  # FHR640 Horiba Spectrometer
-  fhr640:
-    port: "COM1"
-    grating: 1200  # lines/mm
-    center_wavelength: 900  # nm
-    slit_width: 100  # µm
-    gratings: [600, 1200, 1800] # Mapping for indices 0, 1, 2
-    
-    # Physical calibration constants for Czerny-Turner model
-    calibration:
-      focal_length_mm: 640.0
-      deviation_deg: 18.5
-      sensor_tilt_deg: 8.92
-      pixel_stride_um: -26.0
+    - id: "camera_1"
+      name: "Andor iDus Si"
+      model: "DU420_BR,DD"
+      driver: "andor_camera"
+      role: "spectroscopy"
+      camera_index: 1
+      serial_number: 20198
+      enabled: true
+      
+      # Sensor Specs
+      detector_size: [1024, 256]
+      
+      # Acquisition Defaults
+      exposure_time: 0.3
+      temperature: -70
+      fan_mode: "full"
 
-  # Andor Cameras
-  vis_camera:
-    model: "Luc285_MONO"
-    serial_number: 1195
-    camera_index: 0
-    detector_size: [1004, 1002]
-    exposure_time: 0.1
-    temperature: -20
-    fan_mode: "full"
-    
-  spec_camera:
-    model: "DU420_BR,DD"
-    serial_number: 20198
-    camera_index: 1
-    detector_size: [1024, 256]
-    exposure_time: 0.3
-    temperature: -70
-    fan_mode: "full"
+    - id: "camera_2"
+      name: "Andor iDus InGaAs (1024)"
+      model: "DU491_17"
+      driver: "andor_camera"
+      role: "spectroscopy"
+      camera_index: 2
+      serial_number: 12144
+      enabled: false
+      
+      # Sensor Specs
+      detector_size: [1024, 1]
+      
+      # Acquisition Defaults
+      exposure_time: 0.3
+      temperature: -70
+      fan_mode: "full"
 
-  # XY Stage
-  stage:
-    type: stub  # or actual driver when available
-    x_range: [0, 100]  # mm
-    y_range: [0, 100]  # mm
-    speed: 5.0  # mm/s
+    - id: "camera_3"
+      name: "Andor iDus InGaAs (512)"
+      model: "DU490_17"
+      driver: "andor_camera"
+      role: "spectroscopy"
+      camera_index: 3
+      serial_number: 14136
+      enabled: false
+      
+      # Sensor Specs
+      detector_size: [512, 1]
+      
+      # Acquisition Defaults
+      exposure_time: 0.3
+      temperature: -70
+      fan_mode: "full"
+
+  # ----------------------------------------------------------------------------
+  # Monochromators 
+  # ----------------------------------------------------------------------------
+  monochromators:
+    - id: "mono_0"
+      name: "Horiba FHR640"
+      driver: "horiba_serial"
+      enabled: false
+      port: "COM1"
+      
+      # Startup State
+      grating_idx: 1
+      center_wavelength: 900
+      slit_width: 50
+      
+      # Hardware Configuration
+      gratings: [600, 1200, 1800]
+      
+      calibration:
+        focal_length_mm: 640.0
+        deviation_deg: 18.5
+        sensor_tilt_deg: 8.92
+        pixel_stride_um: -26.0
+
+    - id: "mono_1"
+      name: "Horiba iHR320"
+      driver: "horiba_sdk"
+      enabled: true
+      unique_id: "Mono 1"
+      
+      # Startup State
+      grating_idx: 0
+      center_wavelength: 920
+      slit_width: 100
+      
+      # Hardware Configuration
+      gratings: [600, 1200, 1200]
+      
+      calibration:
+        focal_length_mm: 320.0
+        deviation_deg: 18.5
+        sensor_tilt_deg: 8.92
+        pixel_stride_um: -26.0
+
+  # ----------------------------------------------------------------------------
+  # Accessories (Power Meters, Stages, etc.)
+  # ----------------------------------------------------------------------------
+  accessories:
+    - id: "pm100"
+      name: "Power Meter"
+      driver: "pm100"
+      enabled: true
+      port: "USB0::0x1313::0x8072::P2000083::INSTR"
+      # Defaults
+      wavelength: 750
+      range: "auto"
+      beam_diameter: 3.0
+
+    - id: "polarizer"
+      name: "Polarizer"
+      driver: "kdc101"
+      enabled: true
+      serial_number: "27271777"
+      kinesis_path: 'C:\Program Files\Thorlabs\Kinesis'
+      scale: "PRM1-Z8"  # Correct scaling for PRM1 series rotation stages (1919.64 counts/deg)
+      velocity: 25.0
+      acceleration: 25.0
+      zero_offset: 0.0
+
+    - id: "stage_x"
+      name: "Stage X"
+      driver: "kdc101"
+      enabled: true
+      serial_number: "27271950"
+      kinesis_path: 'C:\Program Files\Thorlabs\Kinesis'
+      scale: "MTS50-Z8"  # Correct scaling for MTS50 series stages (34555 counts/mm)
+      velocity: 2.4
+      acceleration: 4.5
+      zero_offset: 0.0
+
+    - id: "stage_y"
+      name: "Stage Y"
+      driver: "kdc101"
+      enabled: true
+      serial_number: "27272895"
+      kinesis_path: 'C:\Program Files\Thorlabs\Kinesis'
+      scale: "MTS50-Z8"  # Correct scaling for MTS50 series stages (34555 counts/mm)
+      velocity: 2.4
+      acceleration: 4.5
+      zero_offset: 0.0
+
+  # System Shutter assignment (Role)
+  shutter:
+    linked_id: "polarizer"
+    channel: 1
+
+  # ----------------------------------------------------------------------------
+  # UI Preferences
+  # ----------------------------------------------------------------------------
+  ui:
+    # Sidebar panel ordering
+    panel_order: ["mono", "polarizer", "shutter", "pm100", "stage"]
+
+# ------------------------------------------------------------------------------
+# Acquisition & Paths
+# ------------------------------------------------------------------------------
 
 acquisition:
   objective_lenses: ["20x", "40x", "63x"]
 
 paths:
-  # Base directory for all data saving
-  # Laboratory computer path: C:/Users/al-jd215257/Desktop/Data
   data_root: "C:/Users/al-jd215257/Desktop/Data"

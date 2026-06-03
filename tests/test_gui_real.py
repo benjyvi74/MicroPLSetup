@@ -26,7 +26,8 @@ class TestGUIReal(unittest.TestCase):
         live_view = self.main.live_view_panel
         
         # 1. Connect camera first (if not done auto)
-        if not live_view.hw.spec_camera or not live_view.hw.spec_camera.is_connected():
+        spec_cam = live_view.hw.get_spectroscopy_camera()
+        if not spec_cam or not spec_cam.is_connected():
              QTest.mouseClick(live_view.connect_btn, Qt.MouseButton.LeftButton)
              QTest.qWait(2000) # Wait for connection
         
@@ -35,7 +36,7 @@ class TestGUIReal(unittest.TestCase):
         QTest.qWait(1000) # Give it a second to start
         
         # Verify hardware is acquiring
-        cam = live_view.hw.spec_camera
+        cam = live_view.hw.get_spectroscopy_camera()
         if cam:
             # Check if camera state reflects acquisition
             # (Implementation detail dependent - usually cam.is_acquiring)
