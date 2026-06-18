@@ -5,11 +5,12 @@ Hardware manager for coordinating access to instruments.
 import logging
 import datetime
 import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, cast
 
 from .factory import create_instrument
-from .base import Instrument
+from .base import Instrument, PowerMeter
 from ..core.calibration import SpectrometerCalibration, PolarizerCalibration
+from .andor_camera import AndorCamera
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +365,7 @@ class HardwareManager:
     @property
     def mono(self):
         """Helper to get the currently active monochromator."""
-        return self.monochromators.get(self.active_monochromator_id)
+        return self.monochromators.get(self.active_monochromator_id) if self.active_monochromator_id else None
 
     @property
     def polarizer(self) -> Optional[Instrument]:
@@ -395,10 +396,6 @@ class HardwareManager:
         """Return the KDC101 instance used for Stage Y axis."""
         return self.get_instrument('stage_y')
 
-    @property
-    def kdc101(self):
-        """Deprecated: Use .polarizer or .get_instrument(id) instead."""
-        return self.polarizer
 
     @property
     def current_wavelength(self) -> float:
@@ -413,7 +410,7 @@ class HardwareManager:
         if self.mono:
             self.mono.set_center_wavelength(value)
             
-        pm = self.get_instrument('pm100')
+        pm = cast(Optional[PowerMeter], self.get_instrument('pm100'))
         if pm:
             try:
                 pm.set_wavelength(value)
@@ -429,7 +426,7 @@ class HardwareManager:
         Update calibration engine with active camera pixel size and active mono parameters.
         """
         # 1. Update from Spectroscopy Camera
-        cam = self.get_spectroscopy_camera()
+        cam = cast(Optional[AndorCamera], self.get_spectroscopy_camera())
         if cam and cam.is_connected():
             try:
                 px_size = cam.get_pixel_size()
@@ -447,9 +444,9 @@ class HardwareManager:
             m_cfg = self.get_monochromator_config(self.active_monochromator_id)
             cal_cfg = m_cfg.get('calibration', {})
             if cal_cfg:
-                self.calibration.focal_length_mm = cal_cfg.get('focal_length_mm', 640.0)
-                self.calibration.deviation_deg = cal_cfg.get('deviation_deg', 18.5)
-                self.calibration.sensor_tilt_deg = cal_cfg.get('sensor_tilt_deg', 8.92)
+                self.calibration.f = cal_cfg.get('focal_length_mm', 640.0)
+                self.calibration.delta = np.deg2rad(cal_cfg.get('deviation_deg', 18.5) / 2.0)
+                self.calibration.gamma = np.deg2rad(cal_cfg.get('sensor_tilt_deg', 8.92))
                 logger.info(f"Sync: Calibration engine updated for {self.active_monochromator_id}")
 
     def get_wavelength_axis(self, camera_id: Optional[str] = None) -> Optional[np.ndarray]:
@@ -461,8 +458,11 @@ class HardwareManager:
         """
         if camera_id is None:
             camera_id = self.get_spectroscopy_camera_id()
+            
+        if camera_id is None:
+            return None
 
-        cam = self.get_camera(camera_id)
+        cam = cast(Optional[AndorCamera], self.get_camera(camera_id))
         if not cam or not self.mono:
             return None
             
@@ -478,6 +478,8 @@ class HardwareManager:
                 grating_idx = 0
 
         mono_id = self.active_monochromator_id
+        if not mono_id:
+            return None
         mono_config = self.get_monochromator_config(mono_id)
         densities = mono_config.get('gratings', [600, 1200, 1800])
         
@@ -528,7 +530,7 @@ class HardwareManager:
         # 1. Monochromator
         mono = self.mono
         mono_id = self.active_monochromator_id
-        if mono and mono.is_connected():
+        if mono and mono.is_connected() and mono_id:
             grating_idx = mono.get_grating()
             mono_config = self.get_monochromator_config(mono_id)
             gratings_config = mono_config.get('gratings', [600, 1200, 1800])
@@ -553,16 +555,19 @@ class HardwareManager:
         for cam_id, cam in self.cameras.items():
             if cam and cam.is_connected():
                 try:
-                    info = cam.get_info()
+                    cam_typed = cast(AndorCamera, cam)
+                    info = cam_typed.get_info()
                     try:
-                        exposure_s = cam.get_exposure()
+                        exposure_s = cam_typed.get_exposure()
                     except:
                         exposure_s = info.get('exposure_time', info.get('actual_exposure', 0.0))
+                    if exposure_s is None:
+                        exposure_s = 0.0
                     meta['Camera'][cam_id] = {
                         'Name': self.get_camera_config(cam_id).get('name', cam_id),
                         'Model': info.get('Model', info.get('model', 'Unknown')),
                         'Exposure (ms)': exposure_s * 1000.0,
-                        'ROI': cam.get_roi()
+                        'ROI': cam_typed.get_roi()
                     }
                 except Exception as e:
                     logger.warning(f"Failed to collect metadata for camera {cam_id}: {e}")

@@ -98,7 +98,7 @@ class ThorlabsPM100(PowerMeter):
             'connected': self.is_connected(),
         }
 
-        if self.is_connected():
+        if self.is_connected() and self._dev is not None:
             try:
                 info['wavelength'] = self.get_wavelength()
                 with self._lock:
@@ -119,7 +119,7 @@ class ThorlabsPM100(PowerMeter):
 
     def get_sensor_info(self) -> Any:
         """Get connected sensor information."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return None
         try:
             with self._lock:
@@ -131,7 +131,7 @@ class ThorlabsPM100(PowerMeter):
 
     def get_ranges(self) -> list:
         """Get available measurement ranges."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return []
         try:
             with self._lock:
@@ -143,7 +143,7 @@ class ThorlabsPM100(PowerMeter):
 
     def get_beam_diameter(self) -> float:
         """Get beam diameter in mm."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return self._beam_diameter
         try:
             with self._lock:
@@ -155,7 +155,7 @@ class ThorlabsPM100(PowerMeter):
 
     def set_beam_diameter(self, diameter: float) -> None:
         """Set beam diameter in mm."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         try:
             with self._lock:
@@ -173,7 +173,7 @@ class ThorlabsPM100(PowerMeter):
         Returns:
             Power in watts (background-corrected)
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         try:
@@ -194,7 +194,7 @@ class ThorlabsPM100(PowerMeter):
         Returns:
             Raw power in watts
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         try:
@@ -211,7 +211,7 @@ class ThorlabsPM100(PowerMeter):
         Take current reading as software background offset.
         Future read_power() calls will subtract this offset.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         raw_power = self.read_power_raw()
@@ -241,7 +241,7 @@ class ThorlabsPM100(PowerMeter):
         Args:
             wavelength: Wavelength in nm
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         try:
@@ -263,7 +263,7 @@ class ThorlabsPM100(PowerMeter):
         Args:
             range_value: Range setting ('auto' or specific value)
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         try:
@@ -281,7 +281,7 @@ class ThorlabsPM100(PowerMeter):
 
     def set_autorange(self, enabled: bool) -> None:
         """Enable or disable auto-ranging."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         
         try:
@@ -294,7 +294,7 @@ class ThorlabsPM100(PowerMeter):
 
     def get_autorange(self) -> bool:
         """Check if auto-ranging is enabled."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return True
         try:
             with self._lock:
@@ -304,7 +304,7 @@ class ThorlabsPM100(PowerMeter):
 
     def get_averaging_count(self) -> int:
         """Get measurement averaging count."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return 1
         try:
             with self._lock:
@@ -314,7 +314,7 @@ class ThorlabsPM100(PowerMeter):
 
     def set_averaging_count(self, count: int) -> None:
         """Set measurement averaging count."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         try:
             with self._lock:
@@ -326,7 +326,7 @@ class ThorlabsPM100(PowerMeter):
 
     def get_wavelength(self) -> float:
         """Get current wavelength setting."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return self._wavelength
         
         try:
@@ -340,7 +340,7 @@ class ThorlabsPM100(PowerMeter):
 
     def zero(self) -> None:
         """Perform zero calibration (dark measurement)."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         logger.info("Performing zero calibration")

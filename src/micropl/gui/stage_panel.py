@@ -5,16 +5,24 @@ XY Stage control panel for controlling dual KDC101 motors.
 import logging
 import threading
 from ..qt import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QGroupBox, QDoubleSpinBox, QGridLayout, 
-    QFrame, Qt, pyqtSlot, pyqtSignal, QDialog, QDialogButtonBox,
-    QTabWidget
+    QDialog, QDialogButtonBox, QDoubleSpinBox, QFrame,
+    QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QTabWidget, QVBoxLayout, QWidget, Qt,
+    pyqtSignal, pyqtSlot
 )
+from typing import cast, Optional
 from ..hardware.manager import HardwareManager
+from ..hardware.kdc101 import ThorlabsKDC101
 
 logger = logging.getLogger(__name__)
 class StageSettingsDialog(QDialog):
     """Dialog for XY Stage motor parameters (Velocity, Accel, Offset)."""
+    x_vel_spin: QDoubleSpinBox
+    x_accel_spin: QDoubleSpinBox
+    x_offset_spin: QDoubleSpinBox
+    y_vel_spin: QDoubleSpinBox
+    y_accel_spin: QDoubleSpinBox
+    y_offset_spin: QDoubleSpinBox
 
     def __init__(self, parent=None, x_params=None, y_params=None):
         super().__init__(parent)
@@ -112,12 +120,12 @@ class StagePanel(QWidget):
 
     def _init_ui(self):
         """Initialize the user interface."""
-        self.setLayout(QVBoxLayout())
-        self.layout().setContentsMargins(10, 10, 10, 10)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
         
         g_layout = QGridLayout()
         g_layout.setSpacing(5)
-        self.layout().addLayout(g_layout)
+        layout.addLayout(g_layout)
         
         row = 0
         # --- Top Section: Positions (Left) and Jog Controls (Right) ---
@@ -273,7 +281,7 @@ class StagePanel(QWidget):
         # Use full width to match the Polarizer panel style
         g_layout.addWidget(self.params_btn, row, 0, 1, 5)
         
-        self.layout().addStretch()
+        layout.addStretch()
 
     def _on_params_clicked(self):
         """Open settings dialog for XY stage."""
@@ -281,20 +289,23 @@ class StagePanel(QWidget):
         x_params = None
         y_params = None
         
-        if self.hw.stage_x and self.hw.stage_x.is_connected():
-            params = self.hw.stage_x.get_velocity_params()
+        stage_x = cast(Optional[ThorlabsKDC101], self.hw.stage_x)
+        stage_y = cast(Optional[ThorlabsKDC101], self.hw.stage_y)
+        
+        if stage_x and stage_x.is_connected():
+            params = stage_x.get_velocity_params()
             x_params = {
                 'velocity': params['max_velocity'],
                 'acceleration': params['acceleration'],
-                'zero_offset': self.hw.stage_x.zero_offset
+                'zero_offset': stage_x.zero_offset
             }
         
-        if self.hw.stage_y and self.hw.stage_y.is_connected():
-            params = self.hw.stage_y.get_velocity_params()
+        if stage_y and stage_y.is_connected():
+            params = stage_y.get_velocity_params()
             y_params = {
                 'velocity': params['max_velocity'],
                 'acceleration': params['acceleration'],
-                'zero_offset': self.hw.stage_y.zero_offset
+                'zero_offset': stage_y.zero_offset
             }
 
         dialog = StageSettingsDialog(self, x_params, y_params)
@@ -302,20 +313,20 @@ class StagePanel(QWidget):
             vals = dialog.get_values()
             
             # Apply to X
-            if self.hw.stage_x:
+            if stage_x:
                 try:
-                    self.hw.stage_x.set_velocity(vals['x']['velocity'])
-                    self.hw.stage_x.set_acceleration(vals['x']['acceleration'])
-                    self.hw.stage_x.set_zero_offset(vals['x']['zero_offset'])
+                    stage_x.set_velocity(vals['x']['velocity'])
+                    stage_x.set_acceleration(vals['x']['acceleration'])
+                    stage_x.set_zero_offset(vals['x']['zero_offset'])
                 except Exception as e:
                     logger.error(f"Failed to set X stage params: {e}")
 
             # Apply to Y
-            if self.hw.stage_y:
+            if stage_y:
                 try:
-                    self.hw.stage_y.set_velocity(vals['y']['velocity'])
-                    self.hw.stage_y.set_acceleration(vals['y']['acceleration'])
-                    self.hw.stage_y.set_zero_offset(vals['y']['zero_offset'])
+                    stage_y.set_velocity(vals['y']['velocity'])
+                    stage_y.set_acceleration(vals['y']['acceleration'])
+                    stage_y.set_zero_offset(vals['y']['zero_offset'])
                 except Exception as e:
                     logger.error(f"Failed to set Y stage params: {e}")
 
@@ -425,38 +436,43 @@ class StagePanel(QWidget):
 
     def _on_jog_clicked(self, dx, dy):
         step = self.step_spin.value()
-        if dx != 0:
-            threading.Thread(target=lambda: self.hw.stage_x.move_by(dx * step), daemon=True).start()
-        if dy != 0:
-            threading.Thread(target=lambda: self.hw.stage_y.move_by(dy * step), daemon=True).start()
+        stage_x = cast(Optional[ThorlabsKDC101], self.hw.stage_x)
+        stage_y = cast(Optional[ThorlabsKDC101], self.hw.stage_y)
+        if dx != 0 and stage_x is not None:
+            threading.Thread(target=lambda: stage_x.move_by(dx * step), daemon=True).start()
+        if dy != 0 and stage_y is not None:
+            threading.Thread(target=lambda: stage_y.move_by(dy * step), daemon=True).start()
 
     def _on_target_changed(self, axis):
+        stage_x = cast(Optional[ThorlabsKDC101], self.hw.stage_x)
+        stage_y = cast(Optional[ThorlabsKDC101], self.hw.stage_y)
         if axis == 'x':
             val = self.target_x_spin.value()
-            threading.Thread(target=lambda: self.hw.stage_x.move_to(val), daemon=True).start()
+            if stage_x is not None:
+                threading.Thread(target=lambda: stage_x.move_to(val), daemon=True).start()
         else:
             val = self.target_y_spin.value()
-            threading.Thread(target=lambda: self.hw.stage_y.move_to(val), daemon=True).start()
-
-    def _on_move_to_clicked(self):
-        # Kept for compatibility if needed, but not used in UI anymore
-        tx = self.target_x_spin.value()
-        ty = self.target_y_spin.value()
-        threading.Thread(target=lambda: self.hw.stage_x.move_to(tx), daemon=True).start()
-        threading.Thread(target=lambda: self.hw.stage_y.move_to(ty), daemon=True).start()
+            if stage_y is not None:
+                threading.Thread(target=lambda: stage_y.move_to(val), daemon=True).start()
 
     def _on_stop_clicked(self):
-        if self.hw.stage_x: self.hw.stage_x.stop()
-        if self.hw.stage_y: self.hw.stage_y.stop()
+        stage_x = cast(Optional[ThorlabsKDC101], self.hw.stage_x)
+        stage_y = cast(Optional[ThorlabsKDC101], self.hw.stage_y)
+        if stage_x is not None:
+            stage_x.stop()
+        if stage_y is not None:
+            stage_y.stop()
 
     def _on_home_clicked(self, axis):
         """Perform homing on specific stage."""
+        stage_x = cast(Optional[ThorlabsKDC101], self.hw.stage_x)
+        stage_y = cast(Optional[ThorlabsKDC101], self.hw.stage_y)
         if axis == 'x':
             self.home_x_btn.setEnabled(False)
-            target_motor = self.hw.stage_x
+            target_motor = stage_x
         else:
             self.home_y_btn.setEnabled(False)
-            target_motor = self.hw.stage_y
+            target_motor = stage_y
             
         if not target_motor:
             return

@@ -4,26 +4,25 @@ Main window and application entry point for MicroPL GUI.
 
 import sys
 import logging
-from threading import Thread
+import time
+import threading
+from typing import cast
 from ..qt import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QHBoxLayout, QTabWidget, QStatusBar, QMenuBar, QMenu,
-    Qt, QAction, QSplitter, QFrame, QSizePolicy, QLabel
+    QTabWidget, QStatusBar, Qt, QAction, QSplitter,
+    QSizePolicy, QLabel, QMessageBox, QTimer
 )
 
 from .automation_panel import AutomationPanel
 from .measurement_panel import MeasurementPanel
 from .live_view import LiveView
-from .monochromator_panel import MonochromatorPanel
-from .powermeter_panel import PowerMeterPanel
-from .polarizer_panel import PolarizerPanel
 from .setup_tab import SetupTab
 from .equipment_sidebar import EquipmentSidebar
 
 from ..hardware.manager import HardwareManager
+from ..hardware.base import Spectrometer
 
 from .log_viewer import QtLogHandler, LogViewerDialog
-from .splash import MicroPLSplash
 
 logger = logging.getLogger(__name__)
 
@@ -207,57 +206,51 @@ class MainWindow(QMainWindow):
         # 2. Rebuild equipment sidebar
         self.equipment_sidebar.rebuild()
 
-    def _create_separator(self) -> QFrame:
-        """Create a horizontal line separator."""
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        separator.setLineWidth(2)
-        return separator
-
     def _init_menubar(self):
         """Initialize the menu bar."""
         menubar = self.menuBar()
-
+        if menubar is None:
+            return
+            
         # File menu
         file_menu = menubar.addMenu("File")
+        if file_menu is not None:
+            load_config_action = QAction("Load Configuration", self)
+            load_config_action.triggered.connect(self.load_configuration)
+            file_menu.addAction(load_config_action)
 
-        load_config_action = QAction("Load Configuration", self)
-        load_config_action.triggered.connect(self.load_configuration)
-        file_menu.addAction(load_config_action)
+            save_config_action = QAction("Save Configuration", self)
+            save_config_action.triggered.connect(self.save_configuration)
+            file_menu.addAction(save_config_action)
 
-        save_config_action = QAction("Save Configuration", self)
-        save_config_action.triggered.connect(self.save_configuration)
-        file_menu.addAction(save_config_action)
+            file_menu.addSeparator()
 
-        file_menu.addSeparator()
-
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+            exit_action = QAction("Exit", self)
+            exit_action.triggered.connect(self.close)
+            file_menu.addAction(exit_action)
 
         # Hardware menu
         hardware_menu = menubar.addMenu("Hardware")
+        if hardware_menu is not None:
+            self.connect_action = QAction("Connect All", self)
+            self.connect_action.triggered.connect(self.connect_hardware)
+            hardware_menu.addAction(self.connect_action)
 
-        self.connect_action = QAction("Connect All", self)
-        self.connect_action.triggered.connect(self.connect_hardware)
-        hardware_menu.addAction(self.connect_action)
+            self.disconnect_action = QAction("Disconnect All", self)
+            self.disconnect_action.triggered.connect(self.disconnect_hardware)
+            hardware_menu.addAction(self.disconnect_action)
 
-        self.disconnect_action = QAction("Disconnect All", self)
-        self.disconnect_action.triggered.connect(self.disconnect_hardware)
-        hardware_menu.addAction(self.disconnect_action)
-
-        hardware_menu.addSeparator()
-        setup_action = QAction("Hardware Setup...", self)
-        setup_action.triggered.connect(lambda: self.tabs.setCurrentWidget(self.setup_tab))
-        hardware_menu.addAction(setup_action)
+            hardware_menu.addSeparator()
+            setup_action = QAction("Hardware Setup...", self)
+            setup_action.triggered.connect(lambda: self.tabs.setCurrentWidget(self.setup_tab))
+            hardware_menu.addAction(setup_action)
 
         # Help menu
         help_menu = menubar.addMenu("Help")
-
-        about_action = QAction("About", self)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
+        if help_menu is not None:
+            about_action = QAction("About", self)
+            about_action.triggered.connect(self.show_about)
+            help_menu.addAction(about_action)
 
     def _init_statusbar(self):
         """Initialize the status bar."""
@@ -284,10 +277,6 @@ class MainWindow(QMainWindow):
         self.connect_action.setEnabled(False)
         self.disconnect_action.setEnabled(False)
         self.statusbar.showMessage("Connecting all hardware...")
-
-        import threading
-        import time
-        from PyQt6.QtCore import QTimer
 
         def _bg_connect():
             try:
@@ -355,7 +344,7 @@ class MainWindow(QMainWindow):
                             self.hw.initialize_instrument(mono_id, driver, mono_cfg)
                             logger.info(f"Initialized monochromator '{mono_id}' ({mono_cfg.get('name', '')})")
                         
-                        mono = self.hw.get_instrument(mono_id)
+                        mono = cast(Spectrometer, self.hw.get_instrument(mono_id))
                         if mono:
                             mono.connect()
                             logger.info(f"Monochromator '{mono_id}' connected successfully")
@@ -432,7 +421,7 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(0, lambda: self.disconnect_action.setEnabled(True))
                 QTimer.singleShot(0, lambda: self.statusbar.showMessage("Hardware connected"))
 
-        Thread(target=_bg_connect, daemon=True).start()
+        threading.Thread(target=_bg_connect, daemon=True).start()
 
     def disconnect_hardware(self):
         """Disconnect from all hardware."""
@@ -442,7 +431,6 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         """Show about dialog."""
-        from .qt import QMessageBox
         QMessageBox.about(
             self,
             "About MicroPL",

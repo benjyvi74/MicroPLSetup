@@ -185,6 +185,7 @@ class AndorCamera(Camera):
         # Configuration parameters
         self._sdk_version = self.config.get('sdk_version', 2)
         self._camera_index = self.config.get('camera_index', 0)
+        self.serial_number = self.config.get('serial_number', '00000000')
         self._exposure_time = self.config.get('exposure_time', 0.1)
         self._target_temperature = self.config.get('temperature', -70)
         self._fan_mode = self.config.get('fan_mode', 'full')
@@ -250,9 +251,28 @@ class AndorCamera(Camera):
             
             target_id = None
             
+            # Identify other camera instances in HardwareManager that are already connected
+            # to prevent multiple panels from connecting to the same physical camera.
+            claimed_indices = set()
+            try:
+                from .manager import HardwareManager
+                hw_mgr = HardwareManager()
+                for other_cam_id, other_cam in hw_mgr.cameras.items():
+                    if other_cam is not self and getattr(other_cam, '_connected', False):
+                        other_idx = getattr(other_cam, '_camera_index', None)
+                        other_sdk = getattr(other_cam, '_sdk_version', None)
+                        if other_idx is not None and other_sdk is not None:
+                            claimed_indices.add((other_sdk, other_idx))
+            except Exception as e:
+                logger.debug(f"Could not retrieve claimed camera list: {e}")
+
             # 1. Match by Serial Number (STRICT)
             if requested_sn:
                 for cam_id, info in available.items():
+                    sdk = info.get('sdk_version')
+                    idx = info.get('camera_index')
+                    if (sdk, idx) in claimed_indices:
+                        continue
                     if int(info.get('serial_number', 0)) == int(requested_sn):
                         target_id = cam_id
                         break
@@ -260,6 +280,11 @@ class AndorCamera(Camera):
             # 2. Match by Model and Index (FALLBACK)
             if not target_id:
                 for cam_id, info in available.items():
+                    sdk = info.get('sdk_version')
+                    idx = info.get('camera_index')
+                    if (sdk, idx) in claimed_indices:
+                        continue
+                    
                     match_model = str(info.get('model', '')).lower()
                     match_head = str(info.get('head_model', '')).lower()
                     
@@ -270,25 +295,33 @@ class AndorCamera(Camera):
                                    
                     if model_match:
                         # If a specific index was requested, prioritize it
-                        if requested_idx is not None and info.get('camera_index') == requested_idx:
+                        if requested_idx is not None and idx == requested_idx:
                             target_id = cam_id
                             break
                         # Otherwise take the first available matching model
                         if target_id is None:
                             target_id = cam_id
             
+            if not available:
+                raise RuntimeError("No Andor cameras physically connected.")
+
             if target_id:
                 info = available[target_id]
                 self._camera_index = info['camera_index']
                 self._sdk_version = info['sdk_version']
-                logger.debug(f"Resolved camera ID '{target_id}' -> Index {self._camera_index}")
+                logger.info(f"Resolved camera ID '{target_id}' -> Index {self._camera_index}")
             else:
-                logger.warning(f"Could not find matching camera in discovery. Fallback to index {self._camera_index}")
-            
-            if target_id:
-                info = available[target_id]
-                self._camera_index = info['camera_index']
-                self._sdk_version = info['sdk_version']
+                if requested_sn:
+                    raise RuntimeError(
+                        f"Could not find Andor camera with serial number '{requested_sn}' in discovered hardware. "
+                        f"Available serials: {[info.get('serial_number') for info in available.values()]}"
+                    )
+                else:
+                    raise RuntimeError(
+                        f"Could not find Andor camera matching model '{self.model}' in discovered hardware. "
+                        f"Available models: {[info.get('model') for info in available.values()]}"
+                    )
+
 
             # --- ACTUAL CONNECTION (Holding self._lock for the session object) ---
             with self._lock:
@@ -377,15 +410,15 @@ class AndorCamera(Camera):
         logger.info(f"Disconnecting {self.model}")
 
         with self._lock:
-            if self._acquiring:
-                try: 
-                    self._cam.stop_acquisition()
-                    self._cam.clear_acquisition()
-                except: 
-                    pass
-                self._acquiring = False
-
             if self._cam is not None:
+                if self._acquiring:
+                    try: 
+                        self._cam.stop_acquisition()
+                        self._cam.clear_acquisition()
+                    except: 
+                        pass
+                    self._acquiring = False
+
                 try:
                     lock_to_use = _SDK2_LOCK if self._sdk_version == 2 else _SDK3_LOCK
                     with lock_to_use:
@@ -395,12 +428,62 @@ class AndorCamera(Camera):
                     logger.error(f"Error closing camera: {e}")
                 finally:
                     self._cam = None
+            else:
+                self._acquiring = False
 
             self._connected = False
 
+    def _check_communication_error(self, e: Exception) -> None:
+        """Check if an exception is a fatal communication error, and if so, disconnect."""
+        err_str = str(e).lower()
+        if "acquiring" in err_str or "drv_acquiring" in err_str:
+            return
+            
+        logger.error(f"Andor Camera (SN {self.serial_number}): Fatal communication error detected: {e}. Marking as disconnected.")
+        self._connected = False
+        self._acquiring = False
+        if self._cam is not None:
+            try:
+                self._cam.close()
+            except:
+                pass
+            self._cam = None
+
     def is_connected(self) -> bool:
-        """Check connection status."""
-        return self._connected and self._cam is not None
+        """Check connection status, periodically verifying physical hardware presence."""
+        if not self._connected or self._cam is None:
+            return False
+
+        # Rate-limited physical connection verification (every 1.0 second max)
+        now = time.time()
+        if not hasattr(self, '_last_conn_check'):
+            self._last_conn_check = 0.0
+
+        if (now - self._last_conn_check) >= 1.0:
+            self._last_conn_check = now
+            try:
+                with self._lock:
+                    if self._cam is None:
+                        return False
+                    if self._sdk_version == 2:
+                        if not self._acquiring:
+                            temp = self._cam.get_temperature()
+                            temp_val = temp.temperature if hasattr(temp, 'temperature') else temp
+                            if temp_val == -999.0:
+                                raise RuntimeError("Camera returned -999°C (invalid temperature)")
+                        else:
+                            self._cam.get_status()
+                    else:
+                        temp = self._cam.get_temperature()
+                        if temp == -999.0:
+                            raise RuntimeError("Camera returned -999°C (invalid temperature)")
+
+            except Exception as e:
+                logger.error(f"Connection verification failed for Andor camera {self.model}: {e}")
+                self._check_communication_error(e)
+                return False
+
+        return self._connected
 
     def get_info(self) -> Dict[str, Any]:
         """Get camera information."""
@@ -512,7 +595,7 @@ class AndorCamera(Camera):
         Args:
             exposure_time: Exposure time in seconds
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         self._ensure_stopped()
@@ -532,7 +615,7 @@ class AndorCamera(Camera):
 
     def get_exposure(self) -> float:
         """Get current exposure time in seconds."""
-        if self.is_acquiring():
+        if self.is_acquiring() or self._cam is None:
             return self._exposure_time
         
         try:
@@ -550,7 +633,7 @@ class AndorCamera(Camera):
         Args:
             gain: Gain value or index
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         self._ensure_stopped()
@@ -568,7 +651,7 @@ class AndorCamera(Camera):
 
     def get_preamp_gains(self) -> list:
         """Get available preamp gains."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return []
         try:
             with self._lock:
@@ -580,7 +663,7 @@ class AndorCamera(Camera):
 
     def set_preamp_gain(self, index: int) -> None:
         """Set preamp gain by index."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         self._ensure_stopped()
         try:
@@ -595,7 +678,7 @@ class AndorCamera(Camera):
 
     def get_vss_speeds(self) -> list:
         """Get available vertical shift speeds (periods in us)."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return []
         try:
             with self._lock:
@@ -606,7 +689,7 @@ class AndorCamera(Camera):
 
     def set_vss_speed(self, index: int) -> None:
         """Set vertical shift speed by index."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         self._ensure_stopped()
         try:
@@ -620,7 +703,7 @@ class AndorCamera(Camera):
 
     def get_hss_speeds(self) -> list:
         """Get available horizontal shift speeds (frequencies in MHz)."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return []
         try:
             with self._lock:
@@ -631,7 +714,7 @@ class AndorCamera(Camera):
 
     def set_hss_speed(self, index: int) -> None:
         """Set horizontal shift speed by index."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         self._ensure_stopped()
         try:
@@ -643,20 +726,11 @@ class AndorCamera(Camera):
         finally:
             self._resume_if_needed()
 
-    def optimize_vss_for_fvb(self) -> None:
-        """Automatically select the fastest vertical shift speed for FVB mode."""
-        if not self.is_connected():
-            return
-        try:
-            # Fastest speed is usually the lowest index in Andor SDK
-            self.set_vss_speed(0)
-            logger.info("VSS optimized for FVB (fastest speed selected)")
-        except Exception as e:
-            logger.warning(f"Could not optimize VSS: {e}")
+
 
     def optimize_readout_speed(self) -> None:
         """Select fastest HSS and VSS speeds for the current model."""
-        if not self.is_connected() or self._sdk_version != 2:
+        if not self.is_connected() or self._cam is None or self._sdk_version != 2:
             return
         
         self._ensure_stopped()
@@ -694,7 +768,7 @@ class AndorCamera(Camera):
         Args:
             mode: "auto", "open", or "closed"
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         self._ensure_stopped()
         try:
@@ -715,7 +789,7 @@ class AndorCamera(Camera):
 
     def get_cooling_status(self) -> str:
         """Get detailed cooling status from the SDK."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return "Unknown"
             
         if self._sdk_version == 2 and self.is_acquiring():
@@ -726,6 +800,8 @@ class AndorCamera(Camera):
             try:
                 if self._sdk_version == 2:
                     with self._lock:
+                        if self._cam is None:
+                            return "Unknown"
                         # get_temperature_status returns strings like 'stabilized', 'cooling', 'not_reached', 'cooler_off'
                         status = self._cam.get_temperature_status()
                     # If we got a namedtuple, it usually has a 'status' or we check the string
@@ -733,15 +809,17 @@ class AndorCamera(Camera):
                         return str(status.status)
                     return str(status)
                 return "SDK3" # SDK3 handling differs
+
             except Exception as e:
                 logger.debug(f"get_cooling_status failed for {self.model}: {e}")
+                self._check_communication_error(e)
                 return "Error"
 
     def set_temperature(self, temperature: float) -> None:
         """
         Set target temperature.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         # Basic bounds check to prevent SDK errors
@@ -771,7 +849,7 @@ class AndorCamera(Camera):
 
     def get_temperature(self) -> float:
         """Get current CCD temperature."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         # SDK2 cameras cannot be queried while busy/acquiring
@@ -792,6 +870,8 @@ class AndorCamera(Camera):
                 return self._last_temp if self._last_temp is not None else float('nan')
             
             try:
+                if self._cam is None:
+                    return self._last_temp if self._last_temp is not None else float('nan')
                 temp = None
                 # 1. ALWAYS try the direct numeric method first
                 if hasattr(self._cam, 'get_temperature'):
@@ -799,11 +879,15 @@ class AndorCamera(Camera):
                         val = self._cam.get_temperature()
                         # Some pylablib versions return a namedtuple, others a float
                         temp = val.temperature if hasattr(val, 'temperature') else val
-                    except Exception:
-                        pass
+                        if temp == -999.0:
+                            raise RuntimeError("Camera returned -999°C (invalid temperature)")
+                    except Exception as e:
+                        self._check_communication_error(e)
+                        if not self._connected or self._cam is None:
+                            return float('nan')
 
                 # 2. Fallback to temperature status if direct readout failed
-                if temp is None and self._sdk_version == 2:
+                if temp is None and self._connected and self._cam is not None and self._sdk_version == 2:
                     try:
                         stats = self._cam.get_temperature_status()
                         if hasattr(stats, 'temperature'):
@@ -811,8 +895,13 @@ class AndorCamera(Camera):
                         elif isinstance(stats, (tuple, list)):
                             temp = stats[0]
                         # If it's a string like "not_reached", it's NOT a temperature reading
-                    except Exception:
-                        pass
+                        if temp == -999.0:
+                            raise RuntimeError("Camera returned -999°C (invalid temperature)")
+                    except Exception as e:
+                        self._check_communication_error(e)
+                        if not self._connected or self._cam is None:
+                            return float('nan')
+
             finally:
                 lock_to_use.release()
             
@@ -848,7 +937,7 @@ class AndorCamera(Camera):
             Tuple of (width, height)
             If not connected, returns the configured detector size.
         """
-        if self.is_connected():
+        if self.is_connected() and self._cam is not None:
             if self._actual_detector_size:
                 return self._actual_detector_size
             try:
@@ -868,7 +957,7 @@ class AndorCamera(Camera):
         Returns:
             Tuple of (width, height) in um.
         """
-        if self.is_connected():
+        if self.is_connected() and self._cam is not None:
             try:
                 with self._lock:
                     size = self._cam.get_pixel_size()
@@ -883,8 +972,8 @@ class AndorCamera(Camera):
                 raise RuntimeError(f"Failed to retrieve pixel size from hardware: {e}")
         raise RuntimeError("Cannot get pixel size: Camera is not connected.")
 
-    def set_roi(self, x_start: int = None, x_end: int = None,
-                y_start: int = None, y_end: int = None,
+    def set_roi(self, x_start: Optional[int] = None, x_end: Optional[int] = None,
+                y_start: Optional[int] = None, y_end: Optional[int] = None,
                 x_bin: int = 1, y_bin: int = 1) -> None:
         """
         Set Region of Interest and binning.
@@ -893,7 +982,7 @@ class AndorCamera(Camera):
         - If y_bin >= ROI height: Switches to Single-Track (linked to hardware integration).
         - Otherwise: Uses Image mode with superpixels.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         try:
@@ -989,7 +1078,7 @@ class AndorCamera(Camera):
         Returns:
             Tuple of (x_start, x_end, y_start, y_end, x_bin, y_bin)
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         if self._actual_roi is not None:
@@ -1007,7 +1096,7 @@ class AndorCamera(Camera):
         Args:
             mode: Desired readout mode string
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         # Skip hardware configuration if readout mode is already set to this mode
@@ -1099,7 +1188,7 @@ class AndorCamera(Camera):
         """
         Return whether current data is 1D (spectrum) or 2D (image).
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return "Unknown"
         try:
             with self._lock:
@@ -1121,7 +1210,7 @@ class AndorCamera(Camera):
         """
         Set acquisition mode (single, accumulate, kinetics).
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         self._ensure_stopped()
         try:
@@ -1141,11 +1230,11 @@ class AndorCamera(Camera):
         finally:
             self._resume_if_needed()
 
-    def setup_accumulation(self, num_acc: int, exposure: float = None) -> None:
+    def setup_accumulation(self, num_acc: int, exposure: Optional[float] = None) -> None:
         """
         Setup hardware accumulation mode.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         self._ensure_stopped()
         try:
@@ -1164,7 +1253,7 @@ class AndorCamera(Camera):
 
     def get_adc_channels(self) -> list:
         """Get available ADC channels."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return []
         try:
             with self._lock:
@@ -1174,7 +1263,7 @@ class AndorCamera(Camera):
 
     def set_adc_channel(self, index: int) -> None:
         """Set ADC channel."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         try:
             with self._lock:
@@ -1185,7 +1274,7 @@ class AndorCamera(Camera):
 
     def get_amp_modes(self) -> list:
         """Get available output amplifiers."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return []
         try:
             with self._lock:
@@ -1195,7 +1284,7 @@ class AndorCamera(Camera):
 
     def set_amp_mode(self, index: int) -> None:
         """Set output amplifier."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         try:
             with self._lock:
@@ -1206,7 +1295,7 @@ class AndorCamera(Camera):
 
     def set_baseline_clamp(self, enabled: bool) -> None:
         """Enable or disable baseline clamp."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             return
         try:
             with self._lock:
@@ -1262,7 +1351,7 @@ class AndorCamera(Camera):
         Returns:
             2D numpy array with image data
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         logger.info("Acquiring single image")
@@ -1274,12 +1363,16 @@ class AndorCamera(Camera):
                 if self._acquiring:
                     try:
                         # Wait for at least one frame to ensure we get "fresh" data
-                        self._cam.wait_for_frame(timeout=5.0)
+                        # Calculate timeout dynamically based on exposure time (in seconds)
+                        timeout = max(5.0, self._exposure_time * 2.0 + 2.0)
+                        self._cam.wait_for_frame(timeout=timeout)
                         image = self._cam.read_newest_image()
                     except:
                         image = self._cam.read_newest_image()
                 else:
-                    image = self._cam.snap()
+                    # Calculate timeout dynamically based on exposure time (in seconds)
+                    timeout = max(10.0, self._exposure_time * 2.0 + 5.0)
+                    image = self._cam.snap(timeout=timeout)
             
             if image is None:
                 raise RuntimeError("Failed to acquire image (returned None)")
@@ -1291,11 +1384,12 @@ class AndorCamera(Camera):
             return image
         except Exception as e:
             logger.error(f"Error acquiring image: {e}")
+            self._check_communication_error(e)
             raise
 
     def start_acquisition(self) -> None:
         """Start continuous acquisition mode."""
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         logger.info("Starting continuous acquisition (sequence mode)")
@@ -1358,18 +1452,23 @@ class AndorCamera(Camera):
         Check if camera is currently acquiring.
         Optimized with rate-limited hardware sync.
         """
+        if not self.is_connected():
+            return False
+
         # Always return True if we think we are acquiring
         if self._acquiring:
             return True
             
         # Occasionally check hardware to ensure we didn't miss a stop event
         now = time.time()
-        if not hasattr(self, '_last_status_check'): self._last_status_check = 0
+        if not hasattr(self, '_last_status_check'): self._last_status_check = 0.0
         if (now - self._last_status_check) > 0.5: # Every 500ms
             self._last_status_check = now
             try:
                 if self._sdk_version == 2:
                     with self._lock:
+                        if self._cam is None:
+                            return False
                         status = self._cam.get_status()
                     return status in ['acquiring', 'temp_cycle', 'accum_not_met', 'kinetic_not_met']
             except:
@@ -1383,7 +1482,7 @@ class AndorCamera(Camera):
         Returns:
             Image array or None if no images available
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         if not self._acquiring:
@@ -1393,9 +1492,12 @@ class AndorCamera(Camera):
             # Wait a bit if buffer is empty? 
             # Usually read_oldest_image is non-blocking in pylablib if no images
             with self._lock:
+                if self._cam is None:
+                    return None
                 return self._cam.read_oldest_image()
         except Exception as e:
             logger.error(f"Error reading oldest image: {e}")
+            self._check_communication_error(e)
             return None
 
     def read_newest_image(self) -> Optional[np.ndarray]:
@@ -1406,7 +1508,7 @@ class AndorCamera(Camera):
         Returns:
             Image array or None if no images available
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         if not self._acquiring:
@@ -1416,12 +1518,15 @@ class AndorCamera(Camera):
         with lock_to_use:
             try:
                 with self._lock:
+                    if self._cam is None:
+                        return None
                     return self._cam.read_newest_image()
             except Exception as e:
                 logger.error(f"Error reading newest image: {e}")
+                self._check_communication_error(e)
                 return None
 
-    def read_multiple_images(self, n: int = None) -> list:
+    def read_multiple_images(self, n: Optional[int] = None) -> list:
         """
         Read multiple images from buffer.
 
@@ -1431,18 +1536,21 @@ class AndorCamera(Camera):
         Returns:
             List of image arrays
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         try:
             with self._lock:
+                if self._cam is None:
+                    return []
                 images = self._cam.read_multiple_images(n)
             return images
         except Exception as e:
             logger.error(f"Error reading multiple images: {e}")
+            self._check_communication_error(e)
             return []
 
-    def wait_for_frame(self, timeout: float = None) -> bool:
+    def wait_for_frame(self, timeout: Optional[float] = None) -> bool:
         """
         Wait for new frame to become available.
 
@@ -1452,11 +1560,13 @@ class AndorCamera(Camera):
         Returns:
             True if frame is available, False if timeout
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._cam is None:
             raise RuntimeError("Device not connected")
 
         try:
             with self._lock:
+                if self._cam is None:
+                    return False
                 self._cam.wait_for_frame(timeout=timeout)
             return True
         except Exception:

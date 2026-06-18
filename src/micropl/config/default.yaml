@@ -158,6 +158,7 @@ hardware:
       velocity: 2.4
       acceleration: 4.5
       zero_offset: 0.0
+      physical_limit: 50.0
 
     - id: "stage_y"
       name: "Stage Y"
@@ -169,6 +170,7 @@ hardware:
       velocity: 2.4
       acceleration: 4.5
       zero_offset: 0.0
+      physical_limit: 50.0
 
   # System Shutter assignment (Role)
   shutter:

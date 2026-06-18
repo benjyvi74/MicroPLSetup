@@ -1,8 +1,17 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
+
 from ..qt import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, Qt
+    QCheckBox,
+    QDialog,
+    QHeaderView,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    Qt,
 )
 
 from .automation_panel import format_power_w
@@ -34,8 +43,12 @@ class SequenceSummaryDialog(QDialog):
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["Step #", "Heat Power", "Duration"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.verticalHeader().setVisible(False)
+        h_header = self.table.horizontalHeader()
+        if h_header is not None:
+            h_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        v_header = self.table.verticalHeader()
+        if v_header is not None:
+            v_header.setVisible(False)
         self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         
@@ -50,8 +63,9 @@ class SequenceSummaryDialog(QDialog):
         if self.start_index > 0:
             for c in range(3):
                 item = self.table.item(0, c)
-                item.setText(item.text() + " (Skipped)")
-                item.setForeground(Qt.GlobalColor.gray)
+                if item is not None:
+                    item.setText(item.text() + " (Skipped)")
+                    item.setForeground(Qt.GlobalColor.gray)
 
         # Labels match AutomationPanel re-indexing logic
         offset = self.start_index if self.start_index > 0 else 1
@@ -116,4 +130,70 @@ class SequenceSummaryDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def should_skip_step_0(self) -> bool:
-        return self.skip_checkbox.isChecked()
+        return self.skip_checkbox.isChecked()  # type: ignore[no-any-return]
+
+
+class CustomSequenceSummaryDialog(QDialog):
+    """
+    Dialog to review and confirm a generic custom sequence before execution.
+    """
+    def __init__(self, steps: List[Dict[str, Any]], parent=None):
+        super().__init__(parent)
+        self.steps = steps
+        self.setWindowTitle("Review Custom Sequence")
+        self.resize(600, 450)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # Header
+        layout.addWidget(QLabel("<b>Custom Sequence Steps</b>"))
+        
+        # Summary Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Step #", "Action", "Parameters", "Label/Comment"])
+        h_header = self.table.horizontalHeader()
+        if h_header is not None:
+            h_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        v_header = self.table.verticalHeader()
+        if v_header is not None:
+            v_header.setVisible(False)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        
+        # Populate table
+        for i, step in enumerate(self.steps):
+            row = i
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(str(i + 1)))
+            self.table.setItem(row, 1, QTableWidgetItem(step.get('action', '')))
+            self.table.setItem(row, 2, QTableWidgetItem(step.get('params_desc', '')))
+            self.table.setItem(row, 3, QTableWidgetItem(step.get('comment', '')))
+
+        layout.addWidget(self.table)
+
+        # Info
+        info_lbl = QLabel("Note: Data will be saved to the folder/prefix defined in the main window.\n"
+                          "Ensure relevant hardware devices are connected and calibrated if needed.")
+        info_lbl.setStyleSheet("color: gray; font-style: italic;")
+        info_lbl.setWordWrap(True)
+        layout.addWidget(info_lbl)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        run_btn = QPushButton("Run Sequence")
+        run_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
+        run_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(run_btn)
+        
+        layout.addLayout(btn_layout)
+

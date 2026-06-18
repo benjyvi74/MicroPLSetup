@@ -3,7 +3,7 @@ Plot widgets for high-performance data visualization using PyQtGraph.
 """
 
 import logging
-from typing import Optional, List, Tuple
+from typing import Optional, List
 import numpy as np
 
 from ..qt import (
@@ -11,7 +11,6 @@ from ..qt import (
     QTableWidget, QTableWidgetItem, QFrame, QHeaderView
 )
 import pyqtgraph as pg
-from pyqtgraph import QtGui
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +29,11 @@ class PlotWidget(QWidget):
         super().__init__(parent)
         self._xlabel = "X"
         self._ylabel = "Y"
-        self._plot_item = None
+
         self._curve = None
         self._crosshair_enabled = True
         self._markers = [] # List of active marker items
+        self._in_auto_scale = False # Flag to avoid race condition/re-entrancy in sigStateChanged
         self._init_ui()
 
         logger.debug("PlotWidget (PyQtGraph) initialized")
@@ -48,7 +48,9 @@ class PlotWidget(QWidget):
         self.pw = pg.PlotWidget()
         layout.addWidget(self.pw)
 
-        self._plot_item = self.pw.getPlotItem()
+        _pi = self.pw.getPlotItem()
+        assert _pi is not None
+        self._plot_item = _pi
         self._plot_item.showGrid(x=True, y=True, alpha=0.3)
         
         # Performance Upgrade: 
@@ -63,8 +65,8 @@ class PlotWidget(QWidget):
         marker_pen = pg.mkPen(color=(255, 160, 0, 204), width=1, style=Qt.PenStyle.DotLine)
         self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=marker_pen)
         self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=marker_pen)
-        self.pw.addItem(self.vLine, ignoreBounds=True)
-        self.pw.addItem(self.hLine, ignoreBounds=True)
+        self._plot_item.addItem(self.vLine, ignoreBounds=True)
+        self._plot_item.addItem(self.hLine, ignoreBounds=True)
         self.vLine.hide()
         self.hLine.hide()
 
@@ -75,13 +77,17 @@ class PlotWidget(QWidget):
         self._mouse_inside = False
 
         # Mouse event proxy
-        self.proxy = pg.SignalProxy(self.pw.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
+        scene = self.pw.scene()
+        if scene is not None:
+            self.proxy = pg.SignalProxy(scene.sigMouseMoved, rateLimit=60, slot=self.mouseMoved)  # type: ignore[attr-defined]
 
         # Auto-range synchronization
         self._plot_item.vb.sigStateChanged.connect(self._check_auto_range)
 
     def _check_auto_range(self, vb, *args):
         """Emit signal if any axis has auto-range disabled."""
+        if getattr(self, '_in_auto_scale', False):
+            return
         auto_x, auto_y = vb.autoRangeEnabled()
         if not auto_x or not auto_y:
             self.sigAutoRangeDisabled.emit()
@@ -138,10 +144,10 @@ class PlotWidget(QWidget):
         self._curve = None
         self._plot_item.setLabel('bottom', self._xlabel)
         self._plot_item.setLabel('left', self._ylabel)
-        self.pw.addItem(self.vLine, ignoreBounds=True)
-        self.pw.addItem(self.hLine, ignoreBounds=True)
+        self._plot_item.addItem(self.vLine, ignoreBounds=True)
+        self._plot_item.addItem(self.hLine, ignoreBounds=True)
         for m in self._markers:
-            self.pw.addItem(m, ignoreBounds=True)
+            self._plot_item.addItem(m, ignoreBounds=True)
 
     def add_marker(self, type: str):
         """Add a movable marker to the plot."""
@@ -152,11 +158,11 @@ class PlotWidget(QWidget):
         pen = pg.mkPen(color=(255, 160, 0, 204), width=2, style=Qt.PenStyle.DotLine)
         if 'x' in type.lower():
             m = pg.InfiniteLine(pos=cx, angle=90, movable=True, pen=pen)
-            self.pw.addItem(m, ignoreBounds=True)
+            self._plot_item.addItem(m, ignoreBounds=True)
             self._markers.append(m)
         if 'y' in type.lower():
             m = pg.InfiniteLine(pos=cy, angle=0, movable=True, pen=pen)
-            self.pw.addItem(m, ignoreBounds=True)
+            self._plot_item.addItem(m, ignoreBounds=True)
             self._markers.append(m)
 
     def remove_markers(self):
@@ -213,18 +219,34 @@ class PlotWidget(QWidget):
 
     def auto_scale_all(self):
         """Auto-scale both axes."""
-        self._plot_item.enableAutoRange()
-        self._plot_item.autoRange()
+        self._in_auto_scale = True
+        try:
+            self._plot_item.enableAutoRange()
+            self._plot_item.autoRange()
+        finally:
+            self._in_auto_scale = False
 
     def auto_scale_x(self):
         """Auto-scale only X axis."""
-        self._plot_item.enableAutoRange(axis='x')
-        self._plot_item.autoRange(axis='x')
+        self._in_auto_scale = True
+        try:
+            self._plot_item.enableAutoRange(axis='x')
+            self._plot_item.autoRange(axis='x')
+        finally:
+            self._in_auto_scale = False
 
     def auto_scale_y(self):
         """Auto-scale only Y axis."""
-        self._plot_item.enableAutoRange(axis='y')
-        self._plot_item.autoRange(axis='y')
+        self._in_auto_scale = True
+        try:
+            self._plot_item.enableAutoRange(axis='y')
+            self._plot_item.autoRange(axis='y')
+        finally:
+            self._in_auto_scale = False
+
+    def disable_auto_scale(self):
+        """Disable auto-scaling on both axes."""
+        self._plot_item.disableAutoRange()
 
 
 class ImagePlotWidget(QWidget):
@@ -309,9 +331,10 @@ class ImagePlotWidget(QWidget):
         """Toggle aspect ratio locking."""
         self.imv.getView().setAspectLocked(locked)
 
-    def imshow(self, image: np.ndarray, extent=None):
+    def imshow(self, image: np.ndarray, extent=None, auto_levels: bool = False):
         """Display 2D image."""
-        self.imv.setImage(image.T, autoRange=self._first_frame, autoLevels=self._first_frame)
+        do_levels = self._first_frame or auto_levels
+        self.imv.setImage(image.T, autoRange=self._first_frame, autoLevels=do_levels)
         
         if extent:
             x0, x1, y0, y1 = extent
@@ -404,8 +427,12 @@ class CoordinateWidget(QFrame):
         
         # Internal Table
         self.table = QTableWidget(1, 4)
-        self.table.horizontalHeader().hide()
-        self.table.verticalHeader().hide()
+        h_header = self.table.horizontalHeader()
+        if h_header is not None:
+            h_header.hide()
+        v_header = self.table.verticalHeader()
+        if v_header is not None:
+            v_header.hide()
         self.table.setShowGrid(True)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
@@ -430,36 +457,41 @@ class CoordinateWidget(QFrame):
         """)
         
         # Headers
-        self.table.setItem(0, 0, QTableWidgetItem(" X "))
-        self.table.setItem(0, 2, QTableWidgetItem(" Y "))
-        self.table.item(0, 0).setBackground(QtGui.QColor("#ddd"))
-        self.table.item(0, 2).setBackground(QtGui.QColor("#ddd"))
-        self.table.item(0, 0).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.table.item(0, 2).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._x_header = QTableWidgetItem(" X ")
+        self._y_header = QTableWidgetItem(" Y ")
+        self.table.setItem(0, 0, self._x_header)
+        self.table.setItem(0, 2, self._y_header)
+        self._x_header.setBackground(pg.QtGui.QColor("#ddd"))
+        self._y_header.setBackground(pg.QtGui.QColor("#ddd"))
+        self._x_header.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._y_header.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Values
-        self.table.setItem(0, 1, QTableWidgetItem("  ---  "))
-        self.table.setItem(0, 3, QTableWidgetItem("  ---  "))
-        self.table.item(0, 1).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.table.item(0, 3).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._x_value = QTableWidgetItem("  ---  ")
+        self._y_value = QTableWidgetItem("  ---  ")
+        self.table.setItem(0, 1, self._x_value)
+        self.table.setItem(0, 3, self._y_value)
+        self._x_value.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._y_value.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Geometry
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        if header is not None:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         
         layout.addWidget(self.table)
 
     def set_coords(self, x: float, y: float, x_fmt: str = ".3f", y_fmt: str = ".3f"):
         """Update coordinate values. Use NaN to clear."""
         if np.isnan(x) or np.isnan(y):
-            self.table.item(0, 1).setText("  ---  ")
-            self.table.item(0, 3).setText("  ---  ")
+            self._x_value.setText("  ---  ")
+            self._y_value.setText("  ---  ")
         else:
-            self.table.item(0, 1).setText(f" {x:{x_fmt}} ")
-            self.table.item(0, 3).setText(f" {y:{y_fmt}} ")
+            self._x_value.setText(f" {x:{x_fmt}} ")
+            self._y_value.setText(f" {y:{y_fmt}} ")
 
     def clear(self):
         """Force clear the coordinates."""
@@ -488,7 +520,9 @@ class SpatialMapWidget(QWidget):
         self.pw = pg.PlotWidget()
         layout.addWidget(self.pw)
 
-        self._plot_item = self.pw.getPlotItem()
+        _pi = self.pw.getPlotItem()
+        assert _pi is not None
+        self._plot_item = _pi
         self._plot_item.showGrid(x=True, y=True, alpha=0.3)
         self._plot_item.setAspectLocked(True) # Keep 1:1 spatial aspect ratio (wafer physical dimensions)
 

@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 
 from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame, 
-    QSizePolicy, pyqtSignal, Qt, QPushButton, QLabel, QApplication, QToolButton
+    Qt, QPushButton, QLabel, QApplication, QToolButton
 )
 from PyQt6.QtGui import QDrag, QPainter, QColor
 from PyQt6.QtCore import QMimeData, QEvent
@@ -196,7 +196,7 @@ class EquipmentSidebar(QWidget):
     def __init__(self, hw: HardwareManager, parent=None):
         super().__init__(parent)
         self.hw = hw
-        self._wrappers = [] # Track panel containers for clearing
+        self._wrappers: List[CollapsiblePanel] = [] # Track panel containers for clearing
         
         # Registry of available panel classes by ID
         # 'mono' is a special ID mapping to the active spectrometer
@@ -219,17 +219,17 @@ class EquipmentSidebar(QWidget):
         layout.setSpacing(0)
 
         # Scroll Area for many panels
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         
         self.container = ReorderableVBoxContainer('application/x-equipment-panel')
         self.container.order_changed.connect(self._on_panel_order_changed)
         
-        self.scroll.setWidget(self.container)
-        layout.addWidget(self.scroll)
+        self.scroll_area.setWidget(self.container)
+        layout.addWidget(self.scroll_area)
         
         self.rebuild()
 

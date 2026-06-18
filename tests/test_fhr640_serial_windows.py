@@ -6,7 +6,7 @@ Run this script on the Windows machine with the spectrometer connected via Null-
 import logging
 import time
 import sys
-from micropl.hardware.fhr640 import FHR640
+from micropl.hardware.horiba_serial import HoribaSerialMonochromator
 
 # Configure logging to see the communication details
 logging.basicConfig(
@@ -24,7 +24,7 @@ def run_fhr640_test(port='COM1'):
     }
     
     logger.info(f"--- Starting FHR640 Serial Test on {port} ---")
-    fhr = FHR640(config)
+    fhr = HoribaSerialMonochromator(config)
     
     try:
         # 1. Connect and initialize

@@ -49,7 +49,7 @@ class TestAndorCamera:
         """Test image acquisition with a specific ROI."""
         # Set a 100x100 ROI in the center
         roi = (500, 600, 100, 200, 1, 1) # hstart, hend, vstart, vend, hbin, vbin
-        self.cam.apply_roi(roi)
+        self.cam.set_roi(*roi)
         
         img = self.cam.acquire_image()
         assert img is not None
@@ -73,7 +73,7 @@ class TestFHR640:
 
     @pytest.fixture(autouse=True)
     def setup_mono(self, hw_manager):
-        self.mono = hw_manager.initialize_instrument('mono', 'fhr640')
+        self.mono = hw_manager.initialize_instrument('mono_0', 'horiba_serial')
         self.mono.connect()
         yield
         self.mono.disconnect()
@@ -135,7 +135,7 @@ def test_pm100_sync(hw_manager):
 @pytest.mark.motor
 def test_kdc101_accuracy(hw_manager):
     """Test KDC101 Motor repetitive movement."""
-    kdc = hw_manager.initialize_instrument('kdc101', 'kdc101')
+    kdc = hw_manager.initialize_instrument('polarizer', 'kdc101')
     kdc.connect()
     try:
         start_pos = kdc.get_position()

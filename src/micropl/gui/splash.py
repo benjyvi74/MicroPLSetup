@@ -2,9 +2,13 @@
 Startup splash screen with progress reporting for MicroPL.
 """
 
-from ..qt import QWidget, QVBoxLayout, QProgressBar, QLabel, Qt, QTimer, QPixmap, QImage, QSplashScreen
-from ..qt import QtGui, QtCore # For QPainter, QColor, QFont, QRect
-from ..qt import QApplication
+from pathlib import Path
+
+from .. import __version__
+from ..qt import (
+    QApplication, QLabel, QPixmap, QProgressBar,
+    QSplashScreen, QVBoxLayout, Qt
+)
 
 class MicroPLSplash(QSplashScreen):
     def __init__(self):
@@ -23,7 +27,6 @@ class MicroPLSplash(QSplashScreen):
         layout.setSpacing(5)
         
         # Version Tag (Top Left)
-        from .. import __version__
         self.version_label = QLabel(__version__)
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         # Increased font size to 11px and changed color to dark grey for white background
@@ -39,8 +42,6 @@ class MicroPLSplash(QSplashScreen):
         layout.addWidget(self.logo_label)
         
         # Check for logo file
-        import os
-        from pathlib import Path
         logo_path = Path(__file__).parent / "assets" / "PLC.png"
         
         if logo_path.exists():

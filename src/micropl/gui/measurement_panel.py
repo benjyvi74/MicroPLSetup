@@ -1,20 +1,22 @@
 import logging
 import time
+import os
 import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Tuple, List, Optional
 from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QProgressBar, QGroupBox, QTextEdit,
-    Qt, QTimer, QListWidget, QListWidgetItem, QCheckBox,
-    QSplitter, QFrame, QTabWidget, QGridLayout, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, pyqtSlot, pyqtSignal, QtGui,
-    QIcon, QSize, QComboBox, QDoubleSpinBox
+    QLabel, QProgressBar, QGroupBox,
+    Qt, QListWidget, QListWidgetItem, QCheckBox,
+    QTabWidget, QGridLayout,
+    QSizePolicy, pyqtSlot, pyqtSignal,
+    QIcon, QSize, QComboBox, QDoubleSpinBox, QFileDialog
 )
 
 from .plot import PlotWidget, ImagePlotWidget, CoordinateWidget, SpatialMapWidget
-from typing import Tuple, List, Optional
 from ..hardware.manager import HardwareManager
+from ..core.data_manager import DataManager
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +72,6 @@ class MeasurementPanel(QWidget):
         
         # Auto-range synchronization
         self.live_plot.sigAutoRangeDisabled.connect(lambda: self.auto_all_btn.setChecked(False))
-        self.heatmap.sigAutoRangeDisabled.connect(lambda: self.auto_all_btn.setChecked(False))
         
         logger.info("Measurement Monitor initialized")
 
@@ -269,7 +270,6 @@ class MeasurementPanel(QWidget):
         """)
         progress_layout.addWidget(self.progress_bar, stretch=10)
 
-        import os
         assets_dir = os.path.join(os.path.dirname(__file__), "assets")
         self._icon_pause_mon = QIcon(os.path.join(assets_dir, "pause_button.png"))
         self._icon_play_mon = QIcon(os.path.join(assets_dir, "play_button.png"))
@@ -512,8 +512,8 @@ class MeasurementPanel(QWidget):
         if is_mapping:
             main_win = self.window()
             from .automation_panel import AutomationPanel
-            ap = main_win.findChild(AutomationPanel)
-            if not ap and hasattr(main_win, 'automation_panel'):
+            ap = main_win.findChild(AutomationPanel) if main_win is not None else None
+            if not ap and main_win is not None and hasattr(main_win, 'automation_panel'):
                 ap = main_win.automation_panel
             if ap:
                 is_circle = ap.map_shape_combo.currentText() == "Circle (Circular Window)"
@@ -648,8 +648,7 @@ class MeasurementPanel(QWidget):
             
             # SWAP: Horizontal = Step Index, Vertical = Spectral Axis
             extent = [s_start, s_end, x_linear[0] - 0.5*dx, x_linear[-1] + 0.5*dx]
-            
-            self.heatmap.imshow(display_matrix.T, extent=extent)
+            self.heatmap.imshow(display_matrix.T, extent=extent, auto_levels=self.auto_all_btn.isChecked())
             
         # Refresh current review plot
         if self.history_list.currentItem():
@@ -682,11 +681,12 @@ class MeasurementPanel(QWidget):
             
             display_matrix = np.zeros_like(matrix)
             for i in range(matrix.shape[0]):
-                display_matrix[i, :] = np.interp(x_linear_sorted, x_actual_sorted, matrix_sorted[i, :])[::-1]
+                row = np.asarray(np.interp(x_linear_sorted, x_actual_sorted, matrix_sorted[i, :]))
+                display_matrix[i, :] = row[::-1]
         else:
             display_matrix = np.zeros_like(matrix)
             for i in range(matrix.shape[0]):
-                display_matrix[i, :] = np.interp(x_linear, x_actual, matrix[i, :])
+                display_matrix[i, :] = np.asarray(np.interp(x_linear, x_actual, matrix[i, :]))
                 
         return display_matrix, x_linear
 
@@ -734,6 +734,8 @@ class MeasurementPanel(QWidget):
                 return 
             
         # Display heatmap (Step index on X, Axis on Y)
+        if self._wavelength_axis is None:
+            return
         display_matrix, x_linear = self._get_display_heatmap(
             self._heatmap_matrix, self._wavelength_axis, self._current_unit
         )
@@ -744,8 +746,7 @@ class MeasurementPanel(QWidget):
         # Calculate extent mapping to pixel edges (not centers)
         dx = (x_linear[-1] - x_linear[0]) / (len(x_linear) - 1) if len(x_linear) > 1 else 1.0
         extent = [s_start, s_end, x_linear[0] - 0.5*dx, x_linear[-1] + 0.5*dx]
-        
-        self.heatmap.imshow(display_matrix.T, extent=extent)
+        self.heatmap.imshow(display_matrix.T, extent=extent, auto_levels=self.auto_all_btn.isChecked())
 
         # Continuous auto-scale 
         if self.auto_all_btn.isChecked():
@@ -1027,9 +1028,7 @@ class MeasurementPanel(QWidget):
 
     def _on_import_spectra(self):
         """Load spectra from file system and add to history."""
-        from ..qt import QFileDialog
-        from ..core.data_manager import DataManager
-        
+
         files, _ = QFileDialog.getOpenFileNames(
             self, "Import Spectra", "", "CSV Files (*.csv);;All Files (*)"
         )
@@ -1055,7 +1054,7 @@ class MeasurementPanel(QWidget):
         for f in files:
             try:
                 res = dm.load_spectrum(f)
-                if res.has_spectrum():
+                if res.has_spectrum() and res.wavelengths is not None and res.intensities is not None:
                     # Determine units from metadata for conversion if needed
                     unit = res.metadata.get('_units', res.metadata.get('units', 'nm'))
                     x_nm = res.wavelengths
@@ -1116,6 +1115,8 @@ class MeasurementPanel(QWidget):
         """Handle continuous auto-scale toggle."""
         if checked:
             self._auto_scale_now()
+        else:
+            self.live_plot.disable_auto_scale()
 
     def _auto_scale_now(self):
         """Immediately trigger auto-scale on active plot."""

@@ -4,7 +4,7 @@ Data management: reading and writing CSV files and other formats.
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional, Union
 from datetime import datetime
 import csv
 import tifffile
@@ -23,23 +23,27 @@ class DataManager:
         logger.debug(f"Data manager initialized: root={self.data_root}")
 
     def save_spectrum(self, result: MeasurementResult,
-                     filepath: Optional[str] = None) -> Path:
+                     filepath: Optional[Union[str, Path]] = None) -> Path:
         """
         Save spectrum data to CSV with metadata in header.
         """
         if not result.has_spectrum():
             raise ValueError("Result does not contain spectrum data")
 
+        assert result.wavelengths is not None
+        assert result.intensities is not None
+
         if filepath is None:
             timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
             filename = f"spectrum_{timestamp}.csv"
-            filepath = self.data_root / filename
+            save_path = self.data_root / filename
+        else:
+            save_path = Path(filepath)
 
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write spectrum data
-        with open(filepath, 'w', newline='') as f:
+        with open(save_path, 'w', newline='') as f:
             writer = csv.writer(f)
 
             # Header with metadata
@@ -71,12 +75,12 @@ class DataManager:
             else:
                 axis_label = f'Spectral Axis ({unit})'
 
-            if result.background is not None:
+            bg_data = result.background
+            if bg_data is not None:
                 headers = [axis_label, 'Background', 'Intensity']
                 writer.writerow(headers)
                 
                 # Ensure background is 1D for zipping with wavelengths/intensities
-                bg_data = result.background
                 if bg_data.ndim == 2:
                     bg_data = np.sum(bg_data, axis=0)
                 
@@ -90,8 +94,8 @@ class DataManager:
                 for wl, intensity in zip(wavelengths, result.intensities):
                     writer.writerow([wl, intensity])
 
-        logger.info(f"Spectrum saved to {filepath}")
-        return filepath
+        logger.info(f"Spectrum saved to {save_path}")
+        return save_path
 
     def _write_metadata_to_csv(self, writer, meta: dict, prefix='# '):
         """
@@ -140,10 +144,10 @@ class DataManager:
         Returns:
             MeasurementResult with spectrum data
         """
-        filepath = Path(filepath)
+        path = Path(filepath)
 
-        if not filepath.exists():
-            raise FileNotFoundError(f"File not found: {filepath}")
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {path}")
 
         metadata = {}
         wavelengths = []
@@ -154,7 +158,7 @@ class DataManager:
         # Stack keeps track of (indentation_level, dictionary_object)
         section_stack = [(-1, metadata)]
 
-        with open(filepath, 'r') as f:
+        with open(path, 'r') as f:
             reader = csv.reader(f)
 
             # Parse header metadata
@@ -214,7 +218,7 @@ class DataManager:
                 
                 # If we hit a non-comment line, it might be the column headers
                 if row and len(row) > 0:
-                    header_str = str(row[0]).lower()
+                    header_str = row[0].lower()
                     if "(nm)" in header_str:
                         metadata['_units'] = 'nm'
                     elif "(mev)" in header_str:
@@ -276,11 +280,11 @@ class DataManager:
             metadata=metadata
         )
 
-        logger.info(f"Spectrum loaded from {filepath}")
+        logger.info(f"Spectrum loaded from {path}")
         return result
 
     def save_image(self, result: MeasurementResult,
-                   filepath: Optional[str] = None) -> Path:
+                   filepath: Optional[Union[str, Path]] = None) -> Path:
         """
         Save image data to 16-bit TIFF with sidecar metadata.
         """
@@ -290,19 +294,20 @@ class DataManager:
         if filepath is None:
             timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
             filename = f"image_{timestamp}.tif"
-            filepath = self.data_root / filename
+            save_path = self.data_root / filename
+        else:
+            save_path = Path(filepath)
 
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Save image as TIFF (raw 16-bit)
         # Note: tifffile handles numpy arrays directly.
         # We ensure it's uint16 if it came from the camera, 
         # but for corrected images it might be float32 - we preserve bit depth.
-        tifffile.imwrite(str(filepath), result.image)
+        tifffile.imwrite(str(save_path), result.image)
 
         # Save metadata separately in a sidecar TXT file
-        metadata_path = filepath.with_suffix('.txt')
+        metadata_path = save_path.with_suffix('.txt')
         with open(metadata_path, 'w') as f:
             f.write(f"MicroPL Image Metadata\n")
             f.write(f"{'='*30}\n")
@@ -312,8 +317,8 @@ class DataManager:
             if result.metadata:
                 self._write_metadata_to_txt(f, result.metadata)
 
-        logger.info(f"Image saved to {filepath} and metadata to {metadata_path}")
-        return filepath
+        logger.info(f"Image saved to {save_path} and metadata to {metadata_path}")
+        return save_path
 
     def _write_metadata_to_txt(self, f, meta: dict, indent=''):
         """Recursively write metadata dictionary to text file."""
@@ -337,47 +342,3 @@ class DataManager:
                 self._write_metadata_to_txt(f, v, indent + '  ')
             else:
                 f.write(f"{indent}{key_str}: {v}\n")
-
-    def save_experiment(self, experiment_name: str,
-                       results: List[MeasurementResult]) -> Path:
-        """
-        Save all results from an experiment.
-
-        Args:
-            experiment_name: Name of the experiment
-            results: List of MeasurementResult objects
-
-        Returns:
-            Path to experiment directory
-        """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        exp_dir = self.data_root / f"experiment_{experiment_name}_{timestamp}"
-        exp_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Saving experiment '{experiment_name}' to {exp_dir}")
-
-        for i, result in enumerate(results):
-            if result.has_spectrum():
-                filename = f"step_{i:04d}_spectrum.csv"
-                self.save_spectrum(result, exp_dir / filename)
-
-            if result.has_image():
-                filename = f"step_{i:04d}_image.npy"
-                self.save_image(result, exp_dir / filename)
-
-        logger.info(f"Saved {len(results)} results")
-        return exp_dir
-
-    def list_data_files(self, pattern: str = "*.csv") -> List[Path]:
-        """
-        List data files matching pattern.
-
-        Args:
-            pattern: Glob pattern to match
-
-        Returns:
-            List of matching file paths
-        """
-        files = list(self.data_root.rglob(pattern))
-        logger.debug(f"Found {len(files)} files matching '{pattern}'")
-        return files

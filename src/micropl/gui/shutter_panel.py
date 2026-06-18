@@ -1,7 +1,13 @@
 import logging
-from typing import Optional, Any
-from ..qt import QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout, Qt, pyqtSignal, pyqtSlot
+from typing import Optional, cast
+
+from ..hardware.kdc101 import ThorlabsKDC101
 from ..hardware.manager import HardwareManager
+from ..qt import (
+    QLabel, QPushButton, QVBoxLayout, QWidget,
+    Qt, pyqtSignal, pyqtSlot
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +85,7 @@ class ShutterPanel(QWidget):
             """)
 
     def _on_toggle(self, checked: bool):
-        shutter_dev = self.hw.shutter
+        shutter_dev = cast(Optional[ThorlabsKDC101], self.hw.shutter)
         channel = self.hw.shutter_channel
         if shutter_dev:
             try:
@@ -99,14 +105,14 @@ class ShutterPanel(QWidget):
             self.toggle_btn.blockSignals(False)
 
     def _update_ui_state(self):
-        shutter_dev = self.hw.shutter
+        shutter_dev = cast(Optional[ThorlabsKDC101], self.hw.shutter)
         
         # Always show OPEN/CLOSED, just disable if not ready
         is_open = False
         is_connected = False
         
         if shutter_dev:
-            is_connected = bool(shutter_dev.is_connected())
+            is_connected = shutter_dev.is_connected()
             if is_connected:
                 is_open = shutter_dev.get_shutter()
         
@@ -125,7 +131,7 @@ class ShutterPanel(QWidget):
 
     def get_current_status(self) -> str:
         """Return a status string for the sidebar dot."""
-        shutter_dev = self.hw.shutter
+        shutter_dev = cast(Optional[ThorlabsKDC101], self.hw.shutter)
         if shutter_dev and shutter_dev.is_connected():
             return "Connected"
         return "Disconnected"

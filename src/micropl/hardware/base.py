@@ -4,6 +4,7 @@ Abstract base classes for hardware interfaces.
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+import threading
 
 
 class Instrument(ABC):
@@ -12,6 +13,7 @@ class Instrument(ABC):
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self._connected = False
+        self._lock = threading.RLock()
 
     @abstractmethod
     def connect(self) -> None:
@@ -64,6 +66,16 @@ class Spectrometer(Instrument):
     @abstractmethod
     def set_grating(self, grating: int) -> None:
         """Set grating (lines/mm)."""
+        pass
+
+    @abstractmethod
+    def set_spectral_position(self, value: float, unit: str = "nm") -> None:
+        """Set spectral position (e.g. center wavelength)."""
+        pass
+
+    @abstractmethod
+    def set_slit_width(self, width_um: float, slit_id: int = 0) -> None:
+        """Set slit width in micrometers."""
         pass
 
     @abstractmethod
@@ -134,26 +146,3 @@ class MotorizedDevice(Instrument):
         """Home the device."""
         pass
 
-
-class Stage(Instrument):
-    """Abstract interface for XY stages."""
-
-    @abstractmethod
-    def move_to(self, x: float, y: float) -> None:
-        """Move to absolute position (x, y) in mm."""
-        pass
-
-    @abstractmethod
-    def move_by(self, dx: float, dy: float) -> None:
-        """Move by relative amount (dx, dy) in mm."""
-        pass
-
-    @abstractmethod
-    def get_position(self) -> tuple:
-        """Get current position (x, y) in mm."""
-        pass
-
-    @abstractmethod
-    def home(self) -> None:
-        """Home the stage."""
-        pass

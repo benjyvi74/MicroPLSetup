@@ -335,7 +335,7 @@ class HoribaSDKMonochromator(Spectrometer):
 
     def is_busy(self) -> bool:
         """Return True if a motor is currently moving."""
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             return False
         with self._lock:
             try:
@@ -363,18 +363,18 @@ class HoribaSDKMonochromator(Spectrometer):
         Args:
             wavelength: Target wavelength in nanometers.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             raise RuntimeError("iHR320: Device not connected.")
         logger.info(f"iHR320: Moving to {wavelength:.3f} nm")
         with self._lock:
-            self._mono.MovetoWavelength(float(wavelength))
+            self._mono.MovetoWavelength(wavelength)
         self.wait_until_ready()
         self._center_wavelength = wavelength
         logger.info(f"iHR320: Reached {wavelength:.3f} nm")
 
     def get_current_wavelength(self) -> float:
         """Read the current wavelength position from hardware."""
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             return self._center_wavelength
         with self._lock:
             val = float(self._mono.GetCurrentWavelength())
@@ -430,7 +430,7 @@ class HoribaSDKMonochromator(Spectrometer):
         Args:
             index: Grating turret position index.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             raise RuntimeError("iHR320: Device not connected.")
         logger.info(f"iHR320: Switching to grating index {index}")
         with self._lock:
@@ -449,7 +449,7 @@ class HoribaSDKMonochromator(Spectrometer):
         """
         if not force_read:
             return self._grating_idx
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             return self._grating_idx
         with self._lock:
             current_density, all_densities = self._mono.GetCurrentGrating()
@@ -472,11 +472,11 @@ class HoribaSDKMonochromator(Spectrometer):
             width_um : Target slit width in µm.
             slit_id  : 0=Front Entrance, 1=Side Entrance, 2=Front Exit, 3=Side Exit.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             raise RuntimeError("iHR320: Device not connected.")
         logger.info(f"iHR320: Setting slit {slit_id} to {width_um:.1f} µm")
         with self._lock:
-            self._mono.MovetoSlitWidth(slit_id, float(width_um))
+            self._mono.MovetoSlitWidth(slit_id, width_um)
         self.wait_until_ready()
 
     def get_slit_width(self, slit_id: int = 0) -> float:
@@ -486,7 +486,7 @@ class HoribaSDKMonochromator(Spectrometer):
         Args:
             slit_id: 0=Front Entrance, 1=Side Entrance, 2=Front Exit, 3=Side Exit.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             return 0.0
         with self._lock:
             return float(self._mono.GetCurrentSlitWidth(slit_id))
@@ -504,7 +504,7 @@ class HoribaSDKMonochromator(Spectrometer):
             position: 'direct' / 'front' / 'axial'  →  axial port.
                       'side' / 'lateral'             →  lateral port.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._mono is None:
             raise RuntimeError("iHR320: Device not connected.")
 
         port = port.lower().strip()

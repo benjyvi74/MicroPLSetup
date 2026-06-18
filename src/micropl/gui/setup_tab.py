@@ -4,15 +4,14 @@ Changes are saved to default.yaml and emitted via hw_config_changed signal.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, cast
 
 from ..qt import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QTableWidget, QTableWidgetItem, QHeaderView,
-    QPushButton, QCheckBox, QComboBox, QSpinBox,
-    QDoubleSpinBox, QLineEdit, QLabel, QListWidget,
-    QListWidgetItem, pyqtSignal, QMessageBox, QScrollArea,
-    QFrame, Qt, QSizePolicy,
+    QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox,
+    QHeaderView, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+    QScrollArea, QSizePolicy, QSpinBox, QTableWidget,
+    QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
+    Qt, pyqtSignal
 )
 from ..hardware.manager import HardwareManager
 from ..hardware.factory import list_available_drivers
@@ -42,8 +41,8 @@ class SetupTab(QWidget):
 
     def _init_ui(self):
         root = QVBoxLayout(self)
-        root.setSpacing(14)
-        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(10)
+        root.setContentsMargins(5, 5, 5, 5)
 
         title = QLabel("Hardware Setup")
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #e0e0e0;")
@@ -63,7 +62,7 @@ class SetupTab(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
-        inner_layout.setSpacing(14)
+        inner_layout.setSpacing(10)
         inner_layout.setContentsMargins(0, 0, 0, 0)
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
@@ -71,12 +70,12 @@ class SetupTab(QWidget):
         # Preset selection panel at the top of scrollable area
         inner_layout.addWidget(self._build_presets_section())
 
-        # Equipment tables arranged horizontally
-        tables_row = QHBoxLayout()
-        tables_row.addWidget(self._build_cameras_section())
-        tables_row.addWidget(self._build_monochromator_section())
-        tables_row.addWidget(self._build_accessories_section())
-        inner_layout.addLayout(tables_row)
+        # QTabWidget for spacious and well-aligned layout
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_cameras_section(), "Cameras")
+        self.tabs.addTab(self._build_monochromator_section(), "Monochromators")
+        self.tabs.addTab(self._build_accessories_section(), "Accessories")
+        inner_layout.addWidget(self.tabs)
         
         inner_layout.addStretch()
 
@@ -96,98 +95,136 @@ class SetupTab(QWidget):
 
     # -- Cameras -------------------------------------------------------------
 
-    def _build_cameras_section(self) -> QGroupBox:
+    def _build_cameras_section(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(5, 5, 5, 5)
+
         box = QGroupBox("Cameras")
         box.setStyleSheet("QGroupBox { font-weight: bold; font-size: 13px; } QWidget { font-weight: normal; }")
-        layout = QVBoxLayout(box)
+        box_layout = QVBoxLayout(box)
 
         # Table: enabled | name | model | driver | serial_number | index | temperature | role
         self.cameras_table = QTableWidget(0, 8)
         self.cameras_table.setHorizontalHeaderLabels(
             ["Enabled", "Name", "Model", "Driver", "Serial Number", "Camera Index", "Temperature (°C)", "Role"]
         )
+        
         header = self.cameras_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        self.cameras_table.verticalHeader().setVisible(False)
+        if header is not None:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+            
+        v_header = self.cameras_table.verticalHeader()
+        if v_header is not None:
+            v_header.setVisible(False)
         self.cameras_table.setAlternatingRowColors(True)
-        layout.addWidget(self.cameras_table)
-        return box
+        box_layout.addWidget(self.cameras_table)
+        
+        layout.addWidget(box)
+        return container
 
     # -- Monochromator ------------------------------------------------------    
-    def _build_monochromator_section(self) -> QGroupBox:
+    def _build_monochromator_section(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(5, 5, 5, 5)
+
         box = QGroupBox("Monochromators")
         box.setStyleSheet("QGroupBox { font-weight: bold; font-size: 13px; } QWidget { font-weight: normal; }")
-        layout = QVBoxLayout(box)
+        box_layout = QVBoxLayout(box)
 
         # Table: enabled | name | driver | grating_idx
         self.mono_table = QTableWidget(0, 4)
         self.mono_table.setHorizontalHeaderLabels(
             ["Enabled", "Name", "Driver", "Default Grating Index"]
         )
+        
         header = self.mono_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.mono_table.verticalHeader().setVisible(False)
+        if header is not None:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            
+        v_header = self.mono_table.verticalHeader()
+        if v_header is not None:
+            v_header.setVisible(False)
         self.mono_table.setAlternatingRowColors(True)
         self.mono_table.setSelectionBehavior(QHeaderView.SelectionBehavior.SelectRows)
-        layout.addWidget(self.mono_table)
-        return box
+        box_layout.addWidget(self.mono_table)
+        
+        layout.addWidget(box)
+        return container
 
     # -- Accessories ---------------------------------------------------------
 
-    def _build_accessories_section(self) -> QGroupBox:
+    def _build_accessories_section(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(10)
+
         box = QGroupBox("Accessories")
         box.setStyleSheet("QGroupBox { font-weight: bold; font-size: 13px; } QWidget { font-weight: normal; }")
-        layout = QVBoxLayout(box)
+        box_layout = QVBoxLayout(box)
 
         # Table: enabled | name | driver | id | serial_number
         self.acc_table = QTableWidget(0, 5)
         self.acc_table.setHorizontalHeaderLabels(
             ["Enabled", "Name", "Driver", "ID", "Serial Number"]
         )
+        
         header = self.acc_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.acc_table.verticalHeader().setVisible(False)
+        if header is not None:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+            
+        v_header = self.acc_table.verticalHeader()
+        if v_header is not None:
+            v_header.setVisible(False)
         self.acc_table.setAlternatingRowColors(True)
         self.acc_table.setSelectionBehavior(QHeaderView.SelectionBehavior.SelectRows)
-        layout.addWidget(self.acc_table)
+        box_layout.addWidget(self.acc_table)
+        layout.addWidget(box)
 
-        # System Shutter Link
-        shutter_row = QHBoxLayout()
-        shutter_row.setContentsMargins(0, 10, 0, 0)
-        shutter_label = QLabel("<b>Laser Shutter:</b> Linked to")
-        shutter_row.addWidget(shutter_label)
-        
+        # Laser Shutter Linkage Card Panel
+        shutter_box = QGroupBox("Laser Shutter Linkage")
+        shutter_box.setStyleSheet("QGroupBox { font-weight: bold; font-size: 13px; } QWidget { font-weight: normal; }")
+        shutter_layout = QGridLayout(shutter_box)
+        shutter_layout.setContentsMargins(10, 10, 10, 10)
+        shutter_layout.setHorizontalSpacing(10)
+        shutter_layout.setVerticalSpacing(8)
+
+        # Column 0-3: Combo + Spinbox
+        shutter_layout.addWidget(QLabel("Linked Device:"), 0, 0)
         self.shutter_combo = QComboBox()
-        self.shutter_combo.setFixedWidth(180)
-        shutter_row.addWidget(self.shutter_combo)
-        
-        shutter_row.addWidget(QLabel("on Channel"))
+        self.shutter_combo.setFixedWidth(200)
+        shutter_layout.addWidget(self.shutter_combo, 0, 1)
+
+        shutter_layout.addWidget(QLabel("Output Channel:"), 0, 2)
         self.shutter_channel_spin = QSpinBox()
         self.shutter_channel_spin.setRange(1, 2)
-        shutter_row.addWidget(self.shutter_channel_spin)
-        
-        shutter_note = QLabel("(Select which KDC101 acts as the system shutter)")
+        self.shutter_channel_spin.setFixedWidth(60)
+        shutter_layout.addWidget(self.shutter_channel_spin, 0, 3)
+        shutter_layout.setColumnStretch(4, 1) # Stretch spacer column
+
+        # Row 1: Note span across all columns
+        shutter_note = QLabel("Select which KDC101 acts as the system shutter (e.g., linked to laser path block/unblock).")
         shutter_note.setStyleSheet("color: #888; font-size: 11px;")
-        shutter_row.addWidget(shutter_note)
-        shutter_row.addStretch()
-        
-        layout.addLayout(shutter_row)
-        
-        return box
+        shutter_layout.addWidget(shutter_note, 1, 0, 1, 5)
+
+        layout.addWidget(shutter_box)
+        return container
 
     # -- Panel Order ---------------------------------------------------------
 
@@ -260,8 +297,12 @@ class SetupTab(QWidget):
             if driver_combo.currentText() != 'kdc101': continue
             
             # Column 3: ID
-            item_id = self.acc_table.item(r, 3).text()
-            name = self.acc_table.item(r, 1).text()
+            item_id_cell = self.acc_table.item(r, 3)
+            name_cell = self.acc_table.item(r, 1)
+            if item_id_cell is None or name_cell is None:
+                continue
+            item_id = item_id_cell.text()
+            name = name_cell.text()
             self.shutter_combo.addItem(f"{name} ({item_id})", item_id)
 
         # Restore selection
@@ -276,7 +317,7 @@ class SetupTab(QWidget):
     # Row helpers
     # -----------------------------------------------------------------------
 
-    def _add_camera_row(self, cfg: Dict[str, Any] = None):
+    def _add_camera_row(self, cfg: Optional[Dict[str, Any]] = None):
         cfg = cfg or {}
         row = self.cameras_table.rowCount()
         self.cameras_table.insertRow(row)
@@ -339,7 +380,7 @@ class SetupTab(QWidget):
         # Stash the original camera ID for reference
         name_item.setData(Qt.ItemDataRole.UserRole, cfg.get('id', f'camera_{row}'))
 
-    def _add_monochromator_row(self, cfg: Dict[str, Any] = None):
+    def _add_monochromator_row(self, cfg: Optional[Dict[str, Any]] = None):
         cfg = cfg or {}
         row = self.mono_table.rowCount()
         self.mono_table.insertRow(row)
@@ -394,7 +435,7 @@ class SetupTab(QWidget):
                         chk.setChecked(False)
                         chk.blockSignals(False)
 
-    def _add_accessory_row(self, cfg: Dict[str, Any] = None):
+    def _add_accessory_row(self, cfg: Optional[Dict[str, Any]] = None):
         cfg = cfg or {}
         row = self.acc_table.rowCount()
         self.acc_table.insertRow(row)
@@ -527,31 +568,36 @@ class SetupTab(QWidget):
         cameras = []
         for row in range(self.cameras_table.rowCount()):
             chk_widget = self.cameras_table.cellWidget(row, 0)
+            if chk_widget is None:
+                continue
             chk = chk_widget.findChild(QCheckBox)
+            if chk is None:
+                continue
             name_item = self.cameras_table.item(row, 1)
+            if name_item is None:
+                continue
             model_item = self.cameras_table.item(row, 2)
-            driver_combo = self.cameras_table.cellWidget(row, 3)
+            driver_combo = cast(Optional[QComboBox], self.cameras_table.cellWidget(row, 3))
             serial_item = self.cameras_table.item(row, 4)
-            idx_spin = self.cameras_table.cellWidget(row, 5)
-            temp_spin = self.cameras_table.cellWidget(row, 6)
-            role_combo = self.cameras_table.cellWidget(row, 7)
+            idx_spin = cast(Optional[QSpinBox], self.cameras_table.cellWidget(row, 5))
+            temp_spin = cast(Optional[QSpinBox], self.cameras_table.cellWidget(row, 6))
+            role_combo = cast(Optional[QComboBox], self.cameras_table.cellWidget(row, 7))
 
             serial_text = serial_item.text().strip() if serial_item else ''
+            serial_val: Optional[Any] = None
             if serial_text.isdigit():
                 serial_val = int(serial_text)
             elif serial_text:
                 serial_val = serial_text
-            else:
-                serial_val = None
 
             cam_id = name_item.data(Qt.ItemDataRole.UserRole) or f'camera_{row}'
             cameras.append({
                 'id': cam_id,
                 'name': name_item.text(),
-                'driver': driver_combo.currentText(),
-                'role': role_combo.currentText(),
-                'camera_index': idx_spin.value(),
-                'temperature': temp_spin.value(),
+                'driver': driver_combo.currentText() if driver_combo else '',
+                'role': role_combo.currentText() if role_combo else 'general',
+                'camera_index': idx_spin.value() if idx_spin else row,
+                'temperature': temp_spin.value() if temp_spin else -20,
                 'serial_number': serial_val,
                 'enabled': chk.isChecked(),
                 # Preserve other fields from original config (except serial_number)
@@ -564,18 +610,24 @@ class SetupTab(QWidget):
         monos = []
         for row in range(self.mono_table.rowCount()):
             chk_widget = self.mono_table.cellWidget(row, 0)
+            if chk_widget is None:
+                continue
             chk = chk_widget.findChild(QCheckBox)
+            if chk is None:
+                continue
             name_item = self.mono_table.item(row, 1)
-            driver_combo = self.mono_table.cellWidget(row, 2)
-            idx_spin = self.mono_table.cellWidget(row, 3)
+            if name_item is None:
+                continue
+            driver_combo = cast(Optional[QComboBox], self.mono_table.cellWidget(row, 2))
+            idx_spin = cast(Optional[QSpinBox], self.mono_table.cellWidget(row, 3))
 
             mono_id = name_item.data(Qt.ItemDataRole.UserRole) or f'mono_{row}'
             monos.append({
                 'id': mono_id,
                 'name': name_item.text(),
-                'driver': driver_combo.currentText(),
+                'driver': driver_combo.currentText() if driver_combo else '',
                 'enabled': chk.isChecked(),
-                'grating_idx': idx_spin.value(),
+                'grating_idx': idx_spin.value() if idx_spin else 1,
                 # Preserve calibration, grating lists, and port
                 **{k: v for k, v in self.hw.get_monochromator_config(mono_id).items()
                    if k not in ('id', 'name', 'driver', 'enabled', 'grating_idx')}
@@ -586,9 +638,13 @@ class SetupTab(QWidget):
         accessories = []
         for row in range(self.acc_table.rowCount()):
             chk_widget = self.acc_table.cellWidget(row, 0)
+            if chk_widget is None:
+                continue
             chk = chk_widget.findChild(QCheckBox)
+            if chk is None:
+                continue
             name_item = self.acc_table.item(row, 1)
-            driver_combo = self.acc_table.cellWidget(row, 2)
+            driver_combo = cast(Optional[QComboBox], self.acc_table.cellWidget(row, 2))
             id_item = self.acc_table.item(row, 3)
             serial_item = self.acc_table.item(row, 4)
 
@@ -603,7 +659,7 @@ class SetupTab(QWidget):
             acc_data = {
                 'id': acc_id,
                 'name': name_item.text() if name_item else '',
-                'driver': driver_combo.currentText(),
+                'driver': driver_combo.currentText() if driver_combo else '',
                 'enabled': chk.isChecked(),
                 # Preserve other fields already in config (port, etc.)
                 **{k: v for k, v in self.hw.get_accessory_config(acc_id).items()

@@ -38,7 +38,6 @@ class ThorlabsKDC101(MotorizedDevice):
         
         # Internal state
         self._dev = None
-        self._is_homed = False
         self._shutter_open = False
         self._lock = threading.RLock()
         
@@ -86,10 +85,6 @@ class ThorlabsKDC101(MotorizedDevice):
                     except Exception as e:
                         logger.warning(f"Failed to set initial acceleration: {e}")
                 
-                # Simplified connect: Avoid noisy calls that might trigger async responses
-                # status = self._dev.get_status_n()
-                # if status & 0x400: self._is_homed = True
-
                 # Prime and Clear: Read position with retries to flush any startup spam
                 for i in range(5):
                     try:
@@ -122,7 +117,6 @@ class ThorlabsKDC101(MotorizedDevice):
                     self._dev.close()
                 self._dev = None
                 self._connected = False
-                self._is_homed = False
             except Exception as e:
                 logger.error(f"Error during disconnect: {e}")
                 self._connected = False
@@ -132,13 +126,11 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def home(self) -> None:
         """Home the device with forced re-triggering and status monitoring."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         
         logger.info(f"INITIATING HOME for SN: {self.serial_number}")
         try:
-            self._is_homed = False
-            
             # 1. Force a clear state
             with self._lock:
                 logger.debug("Sending STOP...")
@@ -173,7 +165,6 @@ class ThorlabsKDC101(MotorizedDevice):
                     last_status = status
                 
                 if is_homed and not is_homing:
-                    self._is_homed = True
                     logger.info(f"HOME SUCCESSFUL for SN: {self.serial_number}")
                     return
                 
@@ -187,7 +178,7 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def move_to(self, position: float) -> None:
         """Move to absolute position (mm)."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
             
         logger.info(f"KDC101 (SN: {self.serial_number}) moving to {position:.3f} mm")
@@ -212,7 +203,7 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def move_by(self, distance: float) -> None:
         """Move by relative distance (mm)."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
             
         logger.info(f"KDC101 (SN: {self.serial_number}) moving by {distance:.3f} mm")
@@ -235,6 +226,8 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def _check_and_clear_errors(self):
         """Check status bits for overload/error and attempt to clear."""
+        if self._dev is None:
+            return
         try:
             status = self._dev.get_status_n()
             # Bit 15 (0x8000) is often Over-current/Overload
@@ -248,7 +241,7 @@ class ThorlabsKDC101(MotorizedDevice):
             pass
 
     def get_position(self) -> float:
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
 
         with self._lock:
@@ -278,10 +271,12 @@ class ThorlabsKDC101(MotorizedDevice):
                     time.sleep(0.05)
             
             # If we get here, it's a persistent error
-            raise last_err
+            if last_err is not None:
+                raise last_err
+            raise RuntimeError("Unknown communication error")
 
     def wait_for_move(self, timeout: float = 30.0) -> bool:
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return False
         with self._lock:
             try:
@@ -292,7 +287,7 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def get_velocity_params(self) -> Dict[str, float]:
         """Returns {'min_velocity', 'acceleration', 'max_velocity'} (mm/s, mm/s^2)"""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         with self._lock:
             p = self._dev.get_velocity_parameters()
@@ -328,7 +323,7 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def get_jog_parameters(self) -> Dict[str, Any]:
         """Returns {'step_size', 'acceleration', 'max_velocity', 'mode'} (mm, mm/s^2, mm/s)"""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         with self._lock:
             p = self._dev.get_jog_parameters()
@@ -340,25 +335,25 @@ class ThorlabsKDC101(MotorizedDevice):
         }
 
     def set_jog_parameters(self, step_size: float) -> None:
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         with self._lock:
             self._dev.setup_jog(step_size=step_size)
 
     def get_backlash(self) -> float:
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return 0.0
         with self._lock:
             return self._dev.get_gen_move_parameters().backlash_distance
 
     def set_backlash(self, distance: float) -> None:
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         with self._lock:
             self._dev.setup_gen_move(backlash_distance=distance)
 
     def get_status_bits(self) -> int:
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return 0
         with self._lock:
             try:
@@ -386,7 +381,7 @@ class ThorlabsKDC101(MotorizedDevice):
             'connected': self._connected,
             'homed': self.is_homed(),
         }
-        if self._connected:
+        if self._connected and self._dev is not None:
             with self._lock:
                 try:
                     d_info = self._dev.get_device_info()
@@ -401,7 +396,7 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def set_digital_output(self, channel: int, state: bool) -> None:
         """Set digital output (shutter control) using pylablib setup_kcube_trigio."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             raise RuntimeError("Device not connected")
         
         try:
@@ -433,7 +428,7 @@ class ThorlabsKDC101(MotorizedDevice):
 
     def stop(self) -> None:
         """Stop the motor immediately."""
-        if not self.is_connected():
+        if not self.is_connected() or self._dev is None:
             return
             
         logger.info(f"Stopping KDC101 (SN: {self.serial_number})")

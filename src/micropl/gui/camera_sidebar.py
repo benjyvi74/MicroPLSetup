@@ -6,13 +6,12 @@ Clicking the card (or its header) makes it the active camera in LiveView.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
-import numpy as np
 from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QPushButton, QLabel, QComboBox, QSpinBox,
-    QCheckBox, QFrame, pyqtSignal, Qt, QSizePolicy,
+    QFrame, pyqtSignal, Qt, QSizePolicy,
     QMenu, QApplication, QToolButton
 )
 from PyQt6.QtGui import QDrag, QPainter, QColor
@@ -23,16 +22,16 @@ logger = logging.getLogger(__name__)
 
 class CameraCard(QFrame):
     """
-    Collapsible card widget for a single camera.
+    Collapsible card widget/component for an individual camera in the sidebar.
+    Each card shows connection status, readout mode, ROI controls, and temperature.
+    Clicking the card (or its header) makes it the active camera in LiveView.
 
     Signals:
         camera_selected(camera_id)  — emitted when the user clicks to activate this camera.
         connect_requested(camera_id) — emitted when the user clicks Connect.
         apply_roi_requested(camera_id) — emitted when Apply ROI is clicked.
-    """
-class CameraCard(QFrame):
-    """
-    Component for an individual camera in the sidebar.
+        readout_mode_changed(camera_id, mode) — emitted when readout mode changes.
+        temp_changed_requested(camera_id, temp) — emitted when temperature changes.
     """
     camera_selected = pyqtSignal(str)   # camera_id
     connect_requested = pyqtSignal(str) # camera_id
@@ -416,12 +415,15 @@ class CameraCard(QFrame):
         menu = QMenu(self)
         
         img_action = menu.addAction("Image Visualisation")
+        assert img_action is not None
         img_action.triggered.connect(lambda: self.apply_preset("image_vis"))
         
         spec_action = menu.addAction("Center Spectrometer")
+        assert spec_action is not None
         spec_action.triggered.connect(lambda: self.apply_preset("center_spec"))
         
         slit_action = menu.addAction("Slit Image")
+        assert slit_action is not None
         slit_action.triggered.connect(lambda: self.apply_preset("slit_image"))
         
         self.presets_btn.setMenu(menu)

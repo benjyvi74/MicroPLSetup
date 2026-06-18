@@ -5,9 +5,11 @@ Asynchronous hardware service for de-coupling GUI from USB communication.
 import time
 import logging
 import numpy as np
-from typing import Dict, Any, Optional
-from ..qt import QObject, QThread, pyqtSignal, pyqtSlot, QTimer
+from typing import Optional, cast, Dict
+from ..qt import QObject, QThread, pyqtSignal, pyqtSlot
 from ..hardware.manager import HardwareManager
+from ..hardware.kdc101 import ThorlabsKDC101
+from ..hardware.pm100 import ThorlabsPM100
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +19,8 @@ class HardwareWorker(QObject):
     Handles physical hardware polling and command execution.
     """
     # Signals for state changes
-    kdc_pos_changed = pyqtSignal(float)
-    kdc_status_changed = pyqtSignal(bool, bool)  # is_connected, is_moving
+    polarizer_pos_changed = pyqtSignal(float)
+    polarizer_status_changed = pyqtSignal(bool, bool)  # is_connected, is_moving
     shutter_changed = pyqtSignal(bool)
     shutter_status_changed = pyqtSignal(bool) # is_connected
     
@@ -43,13 +45,14 @@ class HardwareWorker(QObject):
         self.hw = hardware_manager
         self._running = True
         
-        self._last_kdc_pos = None
+        self._last_polarizer_pos = None
         self._last_shutter_open = None
         self._last_stage_x_pos = None
         self._last_stage_y_pos = None
         self._last_pm_power = None
         self._last_mono_pos = None
         self._last_shutter_conn = None
+        self._last_mono_conn = None
 
     @pyqtSlot()
     def process(self):
@@ -69,39 +72,39 @@ class HardwareWorker(QObject):
                 time.sleep(1.0)
 
     def _poll_polarizer(self):
-        """Poll the KDC101 used as a polarizer."""
-        kdc = self.hw.polarizer
-        if not kdc:
+        """Poll the polarizer motor."""
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if not polarizer:
             return
             
-        if not kdc._lock.acquire(blocking=False):
+        if not polarizer._lock.acquire(blocking=False):
             return
             
         try:
-            is_conn = kdc.is_connected()
+            is_conn = polarizer.is_connected()
             if is_conn:
-                pos = kdc.get_position()
-                moving = kdc.is_moving()
+                pos = polarizer.get_position()
+                moving = polarizer.is_moving()
                 
-                if self._last_kdc_pos is None or abs(pos - self._last_kdc_pos) > 0.0005:
-                    self.kdc_pos_changed.emit(pos)
-                    self._last_kdc_pos = pos
+                if self._last_polarizer_pos is None or abs(pos - self._last_polarizer_pos) > 0.0005:
+                    self.polarizer_pos_changed.emit(pos)
+                    self._last_polarizer_pos = pos
                 
-                self.kdc_status_changed.emit(True, moving)
+                self.polarizer_status_changed.emit(True, moving)
             else:
-                self.kdc_status_changed.emit(False, False)
-                self._last_kdc_pos = None
+                self.polarizer_status_changed.emit(False, False)
+                self._last_polarizer_pos = None
         except Exception as e:
-            logger.error(f"Polarizer KDC101 connection lost: {e}")
-            try: kdc.disconnect()
+            logger.error(f"Polarizer connection lost: {e}")
+            try: polarizer.disconnect()
             except: pass
-            self.kdc_status_changed.emit(False, False)
+            self.polarizer_status_changed.emit(False, False)
         finally:
-            kdc._lock.release()
+            polarizer._lock.release()
 
     def _poll_shutter(self):
         """Poll the device currently acting as the system shutter."""
-        shutter = self.hw.shutter
+        shutter = cast(Optional[ThorlabsKDC101], self.hw.shutter)
         if not shutter:
             return
             
@@ -109,7 +112,7 @@ class HardwareWorker(QObject):
             return
             
         try:
-            is_conn = bool(shutter.is_connected())
+            is_conn = shutter.is_connected()
             if self._last_shutter_conn != is_conn:
                 self.shutter_status_changed.emit(is_conn)
                 self._last_shutter_conn = is_conn
@@ -148,6 +151,7 @@ class HardwareWorker(QObject):
         2. Maintains an error counter to ignore transient serial dropouts, only emitting 
            a 'disconnected' signal if the error persists for several cycles.
         """
+        motor = cast(Optional[ThorlabsKDC101], motor)
         if not motor:
             return
             
@@ -191,7 +195,7 @@ class HardwareWorker(QObject):
 
     def _poll_pm(self):
         try:
-            pm = self.hw.get_instrument('pm100')
+            pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
             if pm:
                 if not pm._lock.acquire(blocking=False):
                     return
@@ -231,6 +235,10 @@ class HardwareWorker(QObject):
             
         try:
             is_conn = mono.is_connected()
+            if self._last_mono_conn != is_conn:
+                self.mono_status_changed.emit(is_conn)
+                self._last_mono_conn = is_conn
+                
             if is_conn:
                 pos = mono.get_current_wavelength()
                 if self._last_mono_pos is None or abs(pos - self._last_mono_pos) > 0.001:
@@ -244,17 +252,15 @@ class HardwareWorker(QObject):
                     self.hw._last_grating_idx = g_idx
                 except:
                     pass
-                    
-                self.mono_status_changed.emit(True)
-            else:
-                self.mono_status_changed.emit(False)
         except Exception as e:
             logger.error(f"Monochromator connection lost: {e}")
             try:
                 mono.disconnect()
             except:
                 pass
-            self.mono_status_changed.emit(False)
+            if self._last_mono_conn != False:
+                self.mono_status_changed.emit(False)
+                self._last_mono_conn = False
         finally:
             mono._lock.release()
 
@@ -270,13 +276,15 @@ class CameraWorker(QObject):
     # Generic camera signals — carry camera_id so receivers can route correctly
     camera_frame_ready = pyqtSignal(str, np.ndarray)  # camera_id, frame
     camera_temp_changed = pyqtSignal(str, float, str)  # camera_id, temp, status
+    camera_status_changed = pyqtSignal(str, bool)  # camera_id, is_connected
 
     def __init__(self, hardware_manager: HardwareManager):
         super().__init__()
         self.hw = hardware_manager
         self._running = True
-        self._last_temp_time = 0
+        self._last_temp_time = 0.0
         self._temp_interval = 10.0  # Polling temp is slow on SDK2, do it rarely
+        self._connected_cache: Dict[str, bool] = {}
 
     @pyqtSlot()
     def process(self):
@@ -290,6 +298,15 @@ class CameraWorker(QObject):
                 time.sleep(1.0)
 
     def _poll_cameras(self):
+        # Check connection state transitions for all cameras
+        for cam_id, cam in self.hw.cameras.items():
+            if cam:
+                is_conn = cam.is_connected()
+                prev_conn = self._connected_cache.get(cam_id, False)
+                if is_conn != prev_conn:
+                    self._connected_cache[cam_id] = is_conn
+                    self.camera_status_changed.emit(cam_id, is_conn)
+
         now = time.time()
         update_temp = (now - self._last_temp_time) > self._temp_interval
         if update_temp:
@@ -351,8 +368,8 @@ class HardwareService(QObject):
         self.cam_thread.started.connect(self.cam_worker.process)
         
         # --- Proxy signals: Hardware ---
-        self.kdc_pos_changed = self.hw_worker.kdc_pos_changed
-        self.kdc_status_changed = self.hw_worker.kdc_status_changed
+        self.polarizer_pos_changed = self.hw_worker.polarizer_pos_changed
+        self.polarizer_status_changed = self.hw_worker.polarizer_status_changed
         self.shutter_changed = self.hw_worker.shutter_changed
         self.shutter_status_changed = self.hw_worker.shutter_status_changed
         
@@ -372,6 +389,7 @@ class HardwareService(QObject):
         # --- Proxy signals: Cameras (generic) ---
         self.camera_frame_ready = self.cam_worker.camera_frame_ready  # (camera_id, frame)
         self.camera_temp_changed = self.cam_worker.camera_temp_changed  # (camera_id, temp, status)
+        self.camera_status_changed = self.cam_worker.camera_status_changed  # (camera_id, is_connected)
 
     def start(self):
         if not self.hw_thread.isRunning():

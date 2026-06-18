@@ -2,72 +2,26 @@
 Power meter control panel.
 """
 
+from collections import deque
 import logging
-from ..qt import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QGroupBox, QDoubleSpinBox, QGridLayout, 
-    QFrame, Qt, QTimer, pyqtSlot, QDialog, QDialogButtonBox,
-    QApplication, pyqtSignal
-)
+import threading
+import time
+from typing import Optional, cast
 
 from ..hardware.manager import HardwareManager
-import time
-from collections import deque
+from ..hardware.pm100 import ThorlabsPM100
+from ..qt import (
+    QApplication, QDialog, QDoubleSpinBox, QFrame,
+    QGridLayout, QHBoxLayout, QLabel,
+    QMessageBox, QPushButton, QVBoxLayout,
+    QWidget, Qt, pyqtSignal, pyqtSlot,
+)
+from .plot import PlotWidget
 
 logger = logging.getLogger(__name__)
 
 
-class PMSettingsDialog(QDialog):
-    """Dialog for Power Meter configuration."""
 
-    def __init__(self, parent=None, current_params=None):
-        super().__init__(parent)
-        self.setWindowTitle("Power Meter Configuration")
-        self.setModal(True)
-        
-        self.params = current_params or {'beam_diameter': 3.0}
-        self._init_ui()
-
-    def _init_ui(self):
-        layout = QVBoxLayout(self)
-        
-        form_layout = QGridLayout()
-        layout.addLayout(form_layout)
-        
-        # Beam Diameter
-        form_layout.addWidget(QLabel("Beam Diameter (mm):"), 0, 0)
-        self.beam_spin = QDoubleSpinBox()
-        self.beam_spin.setRange(0.01, 100.0)
-        self.beam_spin.setDecimals(2)
-        self.beam_spin.setValue(self.params.get('beam_diameter', 3.0))
-        form_layout.addWidget(self.beam_spin, 0, 1)
-        
-        # Zero Sensor button
-        self.zero_btn = QPushButton("Zero Sensor (Dark)")
-        self.zero_btn.clicked.connect(self._on_zero_clicked)
-        layout.addWidget(self.zero_btn)
-        
-        # Buttons
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def _on_zero_clicked(self):
-        """Take current reading as software background (same as Take Background button)."""
-        hw = HardwareManager()
-        pm = hw.get_instrument('pm100')
-        if pm and pm.is_connected():
-            try:
-                pm.set_background()
-                logger.info("Power meter background set (zeroed)")
-            except Exception as e:
-                logger.error(f"Failed to zero power meter: {e}")
-
-    def get_values(self):
-        return {'beam_diameter': self.beam_spin.value()}
 
 
 class PowerTraceWindow(QDialog):
@@ -90,7 +44,6 @@ class PowerTraceWindow(QDialog):
     def _init_ui(self):
         layout = QVBoxLayout(self)
         
-        from .plot import PlotWidget
         self.plot = PlotWidget()
         self.plot.set_labels("Time (s)", "Power")
         layout.addWidget(self.plot)
@@ -316,7 +269,7 @@ class PowerMeterPanel(QWidget):
 
     def _on_take_background(self):
         """Take current reading as software background offset."""
-        pm = self.hw.get_instrument('pm100')
+        pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
         if pm and pm.is_connected():
             try:
                 pm.set_background()
@@ -326,15 +279,13 @@ class PowerMeterPanel(QWidget):
 
     def _on_clear_background(self):
         """Clear software background offset."""
-        pm = self.hw.get_instrument('pm100')
+        pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
         if pm and pm.is_connected():
             pm.clear_background()
         self.clear_bg_btn.setVisible(False)
 
     def _on_connect_clicked(self):
         """Try to connect to the power meter."""
-        from ..qt import QMessageBox
-        
         pm = self.hw.get_instrument('pm100')
         if not pm:
             try:
@@ -386,8 +337,7 @@ class PowerMeterPanel(QWidget):
 
     def _on_wavelength_changed(self):
         """Update wavelength on hardware."""
-        import threading
-        pm = self.hw.get_instrument('pm100')
+        pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
         if pm and pm.is_connected():
             def _set_wave():
                 try:
@@ -399,8 +349,7 @@ class PowerMeterPanel(QWidget):
 
     def _on_beam_diameter_changed(self):
         """Update beam diameter on hardware."""
-        import threading
-        pm = self.hw.get_instrument('pm100')
+        pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
         if pm and pm.is_connected():
             val = self.beam_spin.value()
             def _set_beam():
@@ -412,7 +361,7 @@ class PowerMeterPanel(QWidget):
 
     def _sync_hardware_params(self):
         """Read current parameters from hardware."""
-        pm = self.hw.get_instrument('pm100')
+        pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
         if pm:
             try:
                 self.wave_spin.blockSignals(True)
@@ -429,10 +378,10 @@ class PowerMeterPanel(QWidget):
 
     def get_current_status(self) -> str:
         """Return a string representing the current connection/operational status."""
-        pm = self.hw.get_instrument('pm100')
+        pm = cast(Optional[ThorlabsPM100], self.hw.get_instrument('pm100'))
         if not pm or not pm.is_connected():
             return "Disconnected"
-        if not pm.is_sensor_connected():
+        if pm.get_sensor_info() is None:
             return "Sensor Disconnected"
         if self._connecting:
             return "Connecting"

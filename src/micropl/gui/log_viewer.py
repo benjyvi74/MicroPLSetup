@@ -69,7 +69,8 @@ class LogViewerDialog(QDialog):
         self.log_display.appendPlainText(text)
         # Scroll to bottom
         scrollbar = self.log_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        if scrollbar is not None:
+            scrollbar.setValue(scrollbar.maximum())
 
     def closeEvent(self, event):
         """Just hide instead of destroying to keep history/connection."""

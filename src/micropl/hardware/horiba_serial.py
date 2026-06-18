@@ -5,8 +5,7 @@ Horiba Monochromator driver using native RS-232 serial protocol (FHR640).
 import logging
 import time
 import threading
-from typing import Dict, Any, Optional, Tuple
-import numpy as np
+from typing import Dict, Any, Optional
 
 try:
     import serial
@@ -150,7 +149,7 @@ class HoribaSerialMonochromator(Spectrometer):
         This sends the 'A' command which re-aligns all motors to reference positions.
         Takes 1-2 minutes.
         """
-        if not self.is_connected():
+        if not self.is_connected() or self._serial is None:
             raise RuntimeError("Device not connected")
 
         logger.info("Horiba: Starting full auto-calibration (Homing)...")
@@ -197,11 +196,11 @@ class HoribaSerialMonochromator(Spectrometer):
 
     def is_connected(self) -> bool:
         """Check connection status."""
-        return self._connected and self._serial and self._serial.is_open
+        return bool(self._connected and self._serial and self._serial.is_open)
 
     def _send_command(self, cmd: str) -> str:
         """Send a standard command and wait for confirmation 'o'."""
-        if not self.is_connected():
+        if not self.is_connected() or self._serial is None:
             raise RuntimeError("Device not connected")
             
         with self._lock:
@@ -247,6 +246,8 @@ class HoribaSerialMonochromator(Spectrometer):
 
     def is_busy(self) -> bool:
         """Check if motor is busy."""
+        if not self.is_connected() or self._serial is None:
+            return False
         # Command 'E' is MOTOR BUSY STATUS. 
         # Response is exactly 2 bytes: 'o' (ack) then 'q' (busy) or 'z' (ready)
         with self._lock:
@@ -409,6 +410,8 @@ class HoribaSerialMonochromator(Spectrometer):
 
     def acc_is_busy(self) -> bool:
         """Check if any accessory (swings, shutters) is busy."""
+        if not self.is_connected() or self._serial is None:
+            return False
         # Command 'l' (lowercase L) is ACC BUSY CHECK
         with self._lock:
             self._serial.write(b'l')
@@ -419,19 +422,6 @@ class HoribaSerialMonochromator(Spectrometer):
             status = self._serial.read(1)
             return status == b'q'
 
-    def turret_is_busy(self) -> bool:
-        """Check specifically if the grating turret is busy using Triax commands."""
-        # Note: Z453,0,0,0 is documented for Triax but rejected by some FHR machines.
-        # We now use the generic acc_is_busy() instead for better compatibility.
-        return self.acc_is_busy()
-
-    def wait_acc_ready(self, timeout: float = 30.0):
-        """Wait for mirror/shutter movement."""
-        start_time = time.time()
-        while self.acc_is_busy():
-            if time.time() - start_time > timeout:
-                raise TimeoutError("Horiba accessory movement timed out")
-            time.sleep(0.2)
 
     def set_mirror(self, port: str = "entrance", position: str = "direct") -> None:
         """
@@ -441,6 +431,8 @@ class HoribaSerialMonochromator(Spectrometer):
             port: 'entrance' or 'exit'
             position: 'direct' (Axial/Front) or 'side' (Lateral)
         """
+        if not self.is_connected() or self._serial is None:
+            raise RuntimeError("Device not connected")
         port = port.lower().strip()
         pos = position.lower().strip()
         
@@ -520,7 +512,7 @@ class HoribaSerialMonochromator(Spectrometer):
         except ValueError:
             return 0.0
 
-    def acquire_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
+    def acquire_spectrum(self) -> tuple:
         raise NotImplementedError("Use AndorCamera for acquisition. Horiba is for wavelength control.")
 
     def get_info(self) -> Dict[str, Any]:

@@ -2,9 +2,9 @@
 reorderable_container.py — A QVBoxLayout wrapper that natively supports drag-and-drop reordering.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
-from PyQt6.QtCore import pyqtSignal, QRect
-from PyQt6.QtGui import QPainter, QColor, QPen
+from typing import Optional
+
+from ..qt import QtGui, pyqtSignal, QVBoxLayout, QWidget
 
 class ReorderableVBoxContainer(QWidget):
     """
@@ -36,7 +36,7 @@ class ReorderableVBoxContainer(QWidget):
     def count(self) -> int:
         return max(0, self.main_layout.count() - 1)
         
-    def widgetAt(self, index: int) -> QWidget:
+    def widgetAt(self, index: int) -> Optional[QWidget]:
         item = self.main_layout.itemAt(index)
         if item:
             return item.widget()
@@ -70,7 +70,8 @@ class ReorderableVBoxContainer(QWidget):
         # Find the source widget in our layout by memory address ID
         source_widget = None
         for i in range(self.main_layout.count() - 1): # Ignore stretch
-            w = self.main_layout.itemAt(i).widget()
+            item = self.main_layout.itemAt(i)
+            w = item.widget() if item is not None else None
             if w and str(id(w)) == widget_id_str:
                 source_widget = w
                 break
@@ -84,7 +85,8 @@ class ReorderableVBoxContainer(QWidget):
         target_index = 0
         
         for i in range(self.main_layout.count() - 1):
-            w = self.main_layout.itemAt(i).widget()
+            item = self.main_layout.itemAt(i)
+            w = item.widget() if item is not None else None
             if w and w != source_widget:
                 if pos_y > w.geometry().center().y():
                     target_index += 1
@@ -104,16 +106,17 @@ class ReorderableVBoxContainer(QWidget):
     def paintEvent(self, e):
         super().paintEvent(e)
         if self._drop_y >= 0:
-            painter = QPainter(self)
+            painter = QtGui.QPainter(self)
             # Blue line for visual feedback
-            pen = QPen(QColor(33, 150, 243)) 
+            pen = QtGui.QPen(QtGui.QColor(33, 150, 243)) 
             pen.setWidth(4)
             painter.setPen(pen)
             
             # Find the closest gap
             target_y = self.main_layout.contentsMargins().top()
             for i in range(self.main_layout.count() - 1):
-                w = self.main_layout.itemAt(i).widget()
+                item = self.main_layout.itemAt(i)
+                w = item.widget() if item is not None else None
                 if w:
                     if self._drop_y > w.geometry().center().y():
                         target_y = w.geometry().bottom() + self.main_layout.spacing() // 2

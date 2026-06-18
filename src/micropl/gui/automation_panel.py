@@ -2,9 +2,8 @@ import logging
 import time
 import threading
 import os
-import json
 import csv
-import datetime
+from datetime import datetime
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from ..qt import (
@@ -12,10 +11,13 @@ from ..qt import (
     QPushButton, QLabel, QSpinBox, QDoubleSpinBox,
     QTableWidget, QTableWidgetItem, Qt, QComboBox,
     QHeaderView, QThread, pyqtSignal, QFileDialog,
-    QMessageBox, QTabWidget, QCheckBox, QSplitter, QSizePolicy
+    QMessageBox, QTabWidget, QCheckBox, QSplitter, QSizePolicy,
+    QtGui, QtCore, QFrame, QTimer
 )
 
 from ..hardware.manager import HardwareManager
+from ..core.measurement import MeasurementResult
+from ..core.data_manager import DataManager
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,17 @@ def format_power_w(p_w: float) -> str:
         return f"{p_w:.3f} W"
 
 
+class NumericTableWidgetItem(QTableWidgetItem):
+    """QTableWidgetItem that sorts numerically instead of alphabetically when possible."""
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        try:
+            return float(self.text()) < float(other.text())
+        except ValueError:
+            return super().__lt__(other)
+
+
 def acquire_spectrum_synchronized(cam, hw) -> np.ndarray:
+
     """
     Acquire a spectrum from the camera. If Live View is active, synchronize
     with the background service to fetch a live frame instead of calling
@@ -45,7 +57,7 @@ def acquire_spectrum_synchronized(cam, hw) -> np.ndarray:
     spec_cam_id = hw.get_spectroscopy_camera_id()
     if cam.is_acquiring() and hasattr(hw, 'service') and hw.service and spec_cam_id:
         frame_ready_event = threading.Event()
-        captured_frame = None
+        captured_frame: Optional[np.ndarray] = None
 
         def on_frame(camera_id, data):
             if camera_id == spec_cam_id:
@@ -67,6 +79,7 @@ def acquire_spectrum_synchronized(cam, hw) -> np.ndarray:
             if frame_ready_event.wait(timeout):
                 frame_ready_event.clear()
                 if frame_ready_event.wait(timeout):
+                    assert captured_frame is not None
                     return captured_frame
                 else:
                     logger.warning(f"Live capture (2nd frame) timed out after {timeout}s")
@@ -207,7 +220,6 @@ class LaserHeatingWorker(QThread):
         self.cooling_delay = cooling_delay
         self.start_index = start_index 
         self._running = True
-        import threading
         self._pause_event = threading.Event()
         self._pause_event.set()
         logger.info(f"Worker initialized with cooling_delay={self.cooling_delay}s")
@@ -396,9 +408,6 @@ class LaserHeatingWorker(QThread):
             
             # 2. Process Data (Background Correction + Time Normalization)
             # Use the unified processing logic from HardwareManager
-            from ..core.measurement import MeasurementResult
-            from ..core.data_manager import DataManager
-            from datetime import datetime
             
             # Create a full MeasurementResult to leverage centralized processing and DataManager
             result = MeasurementResult(
@@ -593,7 +602,6 @@ class MappingWorker(QThread):
         self.processing_mode = processing_mode
         self.stabilization_delay = stabilization_delay
         self._running = True
-        import threading
         self._pause_event = threading.Event()
         self._pause_event.set()
 
@@ -627,10 +635,6 @@ class MappingWorker(QThread):
         os.makedirs(self.data_dir, exist_ok=True)
         total_points = len(self.points)
         current_point = 0
-
-        from ..core.measurement import MeasurementResult
-        from ..core.data_manager import DataManager
-        from datetime import datetime
 
         for x, y in self.points:
             self._pause_event.wait()
@@ -745,7 +749,6 @@ class PowerSeriesWorker(QThread):
         self.processing_mode = processing_mode
         self.stabilization_delay = stabilization_delay
         self._running = True
-        import threading
         self._pause_event = threading.Event()
         self._pause_event.set()
 
@@ -825,10 +828,6 @@ class PowerSeriesWorker(QThread):
             if shutter: shutter.set_shutter(False, channel=self.hw.shutter_channel)
 
             # 3. Process & Save
-            from ..core.measurement import MeasurementResult
-            from ..core.data_manager import DataManager
-            from datetime import datetime
-            
             result = MeasurementResult(
                 timestamp=datetime.now(),
                 integration_time=exposure_time,
@@ -870,7 +869,205 @@ class PowerSeriesWorker(QThread):
             self.finished.emit(True, f"Power series complete. Saved to {self.data_dir}")
 
 
+class CustomSequenceWorker(QThread):
+    """
+    Background worker to execute a custom sequence step-by-step.
+    Supports shutter open/close, polarizer angle/power, waits, stages X/Y/XY,
+    monochromator wavelength, and camera spectrum collection.
+    """
+    # step_index (1-based), status_text, progress_percent
+    progress = pyqtSignal(int, str, int)
+    # x_axis, y_axis, label (for plotting and history)
+    measurement_ready = pyqtSignal(np.ndarray, np.ndarray, str)
+    finished = pyqtSignal(bool, str)
 
+    def __init__(self, hardware_manager, steps: List[Dict[str, Any]], 
+                 data_dir: str, metadata: Dict[str, Any], 
+                 background: Optional[np.ndarray] = None,
+                 background_exposure: Optional[float] = None,
+                 processing_mode: str = "Raw Data"):
+        super().__init__()
+        self.hw = hardware_manager
+        self.steps = steps
+        self.data_dir = data_dir
+        self.metadata = metadata
+        self.background = background
+        self.background_exposure = background_exposure
+        self.processing_mode = processing_mode
+        self._running = True
+        self._pause_event = threading.Event()
+        self._pause_event.set()
+
+    def stop(self):
+        self._running = False
+        self._pause_event.set()
+
+    def pause(self):
+        self._pause_event.clear()
+
+    def resume(self):
+        self._pause_event.set()
+
+    def run(self):
+        try:
+            self._execute_sequence()
+        except Exception as e:
+            logger.error(f"Custom sequence execution failed: {e}")
+            self.finished.emit(False, str(e))
+
+    def _execute_sequence(self):
+        polarizer = self.hw.polarizer
+        shutter = self.hw.shutter
+        stage_x = self.hw.stage_x
+        stage_y = self.hw.stage_y
+        mono = self.hw.mono
+        cam = self.hw.get_spectroscopy_camera()
+        cal = self.hw.polarizer_calibration
+
+        os.makedirs(self.data_dir, exist_ok=True)
+        total_steps = len(self.steps)
+        if total_steps == 0:
+            self.finished.emit(True, "Empty sequence completed.")
+            return
+
+        for idx, step in enumerate(self.steps):
+            self._pause_event.wait()
+            if not self._running: break
+
+            step_num = idx + 1
+            percent = int((idx / total_steps) * 100)
+            action = step['action']
+            params = step['params']
+            comment = step['comment']
+
+            self.progress.emit(step_num, f"Step {step_num}: {action} ({step['params_desc']})", percent)
+            logger.info(f"Custom Sequence: Executing Step {step_num} - {action} - {step['params_desc']}")
+
+            if action == "Wait / Stabilize":
+                dur = params.get('duration', 0.0)
+                end_time = time.time() + dur
+                while time.time() < end_time and self._running:
+                    self._pause_event.wait()
+                    time.sleep(0.1)
+
+            elif action == "Shutter (linked)":
+                if not shutter:
+                    raise RuntimeError("Shutter controller not configured")
+                open_state = params.get('open', False)
+                shutter.set_shutter(open_state, channel=self.hw.shutter_channel)
+                time.sleep(0.5) # small stabilization delay
+
+            elif action == "Polarizer Angle":
+                if not polarizer or not polarizer.is_connected():
+                    raise RuntimeError("Polarizer not connected")
+                angle = params.get('angle', 0.0)
+                polarizer.move_to(angle)
+                while polarizer.is_moving() and self._running:
+                    self._pause_event.wait()
+                    time.sleep(0.1)
+                time.sleep(0.5)
+
+            elif action == "Polarizer Power (calibrated)":
+                if not polarizer or not polarizer.is_connected():
+                    raise RuntimeError("Polarizer not connected")
+                if not cal or not cal.points:
+                    raise RuntimeError("Polarizer calibration is empty.")
+                p_w = params.get('power_w', 0.0)
+                angle = cal.get_angle_for_power(p_w)
+                if angle is None:
+                    raise ValueError(f"Power {format_power_w(p_w)} outside calibration range")
+                polarizer.move_to(angle)
+                while polarizer.is_moving() and self._running:
+                    self._pause_event.wait()
+                    time.sleep(0.1)
+                time.sleep(0.5)
+
+            elif action == "Move Stage X":
+                if not stage_x or not stage_x.is_connected():
+                    raise RuntimeError("Stage X not connected")
+                pos = params.get('position', 0.0)
+                stage_x.move_to(pos)
+                while stage_x.is_moving() and self._running:
+                    self._pause_event.wait()
+                    time.sleep(0.1)
+
+            elif action == "Move Stage Y":
+                if not stage_y or not stage_y.is_connected():
+                    raise RuntimeError("Stage Y not connected")
+                pos = params.get('position', 0.0)
+                stage_y.move_to(pos)
+                while stage_y.is_moving() and self._running:
+                    self._pause_event.wait()
+                    time.sleep(0.1)
+
+            elif action == "Collect Spectrum":
+
+
+                if not cam or not cam.is_connected():
+                    raise RuntimeError("Spectrometer camera not connected")
+                
+                # Turn shutter on for acquisition if shutter exists
+                if shutter:
+                    shutter.set_shutter(True, channel=self.hw.shutter_channel)
+                
+                exposure_time = cam.get_exposure()
+                # 3s or exposure time, whichever is longer
+                stab_delay = max(3.0, exposure_time)
+                
+                # Check running/pause while waiting
+                end_stab = time.time() + stab_delay
+                while time.time() < end_stab and self._running:
+                    self._pause_event.wait()
+                    time.sleep(0.1)
+                if not self._running: break
+
+                # Determine the spectral axis (Wavelengths or Pixels)
+                x_axis = self.hw.get_wavelength_axis()
+                if x_axis is None:
+                    det_size = cam.get_info().get('detector_size', (1024, 256))
+                    x_axis = np.arange(det_size[0])
+
+                raw_data = acquire_spectrum_synchronized(cam, self.hw)
+                if raw_data.ndim == 2:
+                    raw_data = np.sum(raw_data, axis=0)
+
+                if shutter:
+                    shutter.set_shutter(False, channel=self.hw.shutter_channel)
+
+                # Process
+                result = MeasurementResult(
+                    timestamp=datetime.now(),
+                    integration_time=exposure_time,
+                    metadata=self.metadata,
+                    wavelengths=x_axis,
+                    intensities=raw_data,
+                    background=self.background,
+                    background_exposure=(self.background_exposure / 1000.0) if self.background_exposure else None
+                )
+                result.process(self.processing_mode)
+                processed_data = result.intensities
+
+                # Save
+                step_name = f"step_{step_num:03d}"
+                if comment:
+                    # Clean comment for filename
+                    clean_comment = "".join(c for c in comment if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+                    if clean_comment:
+                        step_name += f"_{clean_comment}"
+                
+                dm = DataManager(data_root=self.data_dir)
+                fname = f"{step_name}.csv"
+                save_path = os.path.join(self.data_dir, fname)
+                dm.save_spectrum(result, save_path)
+
+                # Emit for plotting
+                self.measurement_ready.emit(x_axis, processed_data, step_name)
+
+        if self._running:
+            self.progress.emit(total_steps, "Sequence Complete", 100)
+            self.finished.emit(True, "Custom sequence executed successfully.")
+        else:
+            self.finished.emit(False, "Sequence aborted by user.")
 
 
 class MapPreviewWidget(QWidget):
@@ -913,7 +1110,6 @@ class MapPreviewWidget(QWidget):
         self.update()
 
     def paintEvent(self, event):
-        from ..qt import QtGui, QtCore
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
 
@@ -1034,7 +1230,6 @@ class AutomationPanel(QWidget):
         self.setLayout(layout)
 
         # Main splitter to allow resizing between Calibration and Sequence
-        from ..qt import QSplitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
         layout.addWidget(splitter)
 
@@ -1063,6 +1258,10 @@ class AutomationPanel(QWidget):
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1) # Equal width initially
         
+        # 3. Custom Sequence Editor
+        custom_seq_group = self._create_custom_sequence_group()
+        layout.addWidget(custom_seq_group)
+
         # Add stretch at the bottom to push panels up and leave space
         layout.addStretch(1)
 
@@ -1092,7 +1291,7 @@ class AutomationPanel(QWidget):
         
         clear_btn = QPushButton("Clear All")
         clear_btn.setFixedWidth(80)
-        clear_btn.clicked.connect(lambda: self.pol_table.setRowCount(0))
+        clear_btn.clicked.connect(self._on_clear_pol_points)
         btn_layout.addWidget(clear_btn)
         
         btn_layout.addStretch()
@@ -1115,7 +1314,9 @@ class AutomationPanel(QWidget):
         self.pol_table = QTableWidget()
         self.pol_table.setColumnCount(4)
         self.pol_table.setHorizontalHeaderLabels(["Target Power", "Unit", "Found Angle (°)", "Status"])
-        self.pol_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        pol_header = self.pol_table.horizontalHeader()
+        if pol_header is not None:
+            pol_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.pol_table.setSelectionBehavior(QHeaderView.SelectionBehavior.SelectRows)
         self.pol_table.setSelectionMode(QHeaderView.SelectionMode.ExtendedSelection)
         self.pol_table.setMinimumHeight(250)
@@ -1153,7 +1354,8 @@ class AutomationPanel(QWidget):
 
     def _on_remove_pol_point(self):
         """Remove all selected rows from the table."""
-        selected_rows = [r.row() for r in self.pol_table.selectionModel().selectedRows()]
+        sel_model = self.pol_table.selectionModel()
+        selected_rows = [r.row() for r in sel_model.selectedRows()] if sel_model is not None else []
         if not selected_rows:
             # Fallback to last row if no selection exists
             curr = self.pol_table.rowCount() - 1
@@ -1168,7 +1370,8 @@ class AutomationPanel(QWidget):
 
     def _on_calibrate_selected(self):
         """Calibrate all currently selected rows."""
-        selected_rows = [r.row() for r in self.pol_table.selectionModel().selectedRows()]
+        sel_model = self.pol_table.selectionModel()
+        selected_rows = [r.row() for r in sel_model.selectedRows()] if sel_model is not None else []
         
         # Fallback to current row if only looking at focus but no selection
         if not selected_rows:
@@ -1232,12 +1435,14 @@ class AutomationPanel(QWidget):
         for r in rows_to_calibrate:
             spin = self.pol_table.cellWidget(r, 0)
             unit_cb = self.pol_table.cellWidget(r, 1)
-            if spin and unit_cb:
+            if isinstance(spin, QDoubleSpinBox) and isinstance(unit_cb, QComboBox):
                 val = spin.value()
                 unit = unit_cb.currentText()
                 target_w = val * multipliers[unit]
                 points.append((r, target_w))
-                self.pol_table.item(r, 3).setText("Queued")
+                status_item = self.pol_table.item(r, 3)
+                if status_item is not None:
+                    status_item.setText("Queued")
         
         if not points:
             return
@@ -1258,10 +1463,14 @@ class AutomationPanel(QWidget):
         self._worker.start()
 
     def _on_point_finished(self, row, success, angle, power, message):
+        angle_item = self.pol_table.item(row, 2)
+        status_item = self.pol_table.item(row, 3)
         if success:
-            self.pol_table.item(row, 2).setText(f"{angle:.3f}")
-            self.pol_table.item(row, 3).setText("Done")
-            self.pol_table.item(row, 3).setForeground(Qt.GlobalColor.green)
+            if angle_item is not None:
+                angle_item.setText(f"{angle:.3f}")
+            if status_item is not None:
+                status_item.setText("Done")
+                status_item.setForeground(Qt.GlobalColor.green)
             
             # Gray out / lock the input widgets
             p_spin = self.pol_table.cellWidget(row, 0)
@@ -1269,8 +1478,9 @@ class AutomationPanel(QWidget):
             if p_spin: p_spin.setEnabled(False)
             if u_combo: u_combo.setEnabled(False)
         else:
-            self.pol_table.item(row, 3).setText(f"Error: {message}")
-            self.pol_table.item(row, 3).setForeground(Qt.GlobalColor.red)
+            if status_item is not None:
+                status_item.setText(f"Error: {message}")
+                status_item.setForeground(Qt.GlobalColor.red)
 
     def _on_sweep_finished(self, success, message):
         self.pol_run_btn.setText("Calibrate All")
@@ -1304,7 +1514,7 @@ class AutomationPanel(QWidget):
             unit_cb = self.pol_table.cellWidget(r, 1)
             angle_item = self.pol_table.item(r, 2)
             
-            if spin and unit_cb and angle_item:
+            if isinstance(spin, QDoubleSpinBox) and isinstance(unit_cb, QComboBox) and angle_item:
                 angle_text = angle_item.text()
                 if angle_text != "---":
                     try:
@@ -1430,7 +1640,9 @@ class AutomationPanel(QWidget):
         self.heating_table = QTableWidget()
         self.heating_table.setColumnCount(3)
         self.heating_table.setHorizontalHeaderLabels(["Step #", "Heat Power", "Duration (s)"])
-        self.heating_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        heating_header = self.heating_table.horizontalHeader()
+        if heating_header is not None:
+            heating_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.heating_table)
 
         # --- Controls & Status ---
@@ -1475,6 +1687,27 @@ class AutomationPanel(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         group.setLayout(layout)
 
+        # --- Sequence Table Toolbar ---
+        table_toolbar = QHBoxLayout()
+        
+        add_btn = QPushButton("+")
+        add_btn.setFixedWidth(30)
+        add_btn.clicked.connect(self._on_add_power_step)
+        table_toolbar.addWidget(add_btn)
+        
+        remove_btn = QPushButton("-")
+        remove_btn.setFixedWidth(30)
+        remove_btn.clicked.connect(self._on_remove_power_step)
+        table_toolbar.addWidget(remove_btn)
+        
+        clear_btn = QPushButton("Clear All")
+        clear_btn.setFixedWidth(80)
+        clear_btn.clicked.connect(self._on_clear_power_steps)
+        table_toolbar.addWidget(clear_btn)
+        
+        table_toolbar.addStretch()
+        layout.addLayout(table_toolbar)
+
         # --- Generator Tool ---
         gen_group = QGroupBox("Sweep Generator")
         gen_group.setStyleSheet("QGroupBox { font-weight: normal; }")
@@ -1514,7 +1747,11 @@ class AutomationPanel(QWidget):
         self.power_table = QTableWidget()
         self.power_table.setColumnCount(2)
         self.power_table.setHorizontalHeaderLabels(["Step #", "Power"])
-        self.power_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        power_header = self.power_table.horizontalHeader()
+        if power_header is not None:
+            power_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.power_table.setSelectionBehavior(QHeaderView.SelectionBehavior.SelectRows)
+        self.power_table.setSelectionMode(QHeaderView.SelectionMode.ExtendedSelection)
         layout.addWidget(self.power_table)
 
         # --- Parameters & Run ---
@@ -1544,17 +1781,15 @@ class AutomationPanel(QWidget):
         """Get the current cooling delay value in seconds."""
         return self.cooling_delay_spin.value()
 
-    def get_measurement_power(self) -> Optional[float]:
-        """Get the selected PL measurement power in Watts."""
-        return self.meas_power_combo.currentData()
-
     def get_power_series_steps(self) -> List[float]:
         """Get the list of target powers (W) from the power series table."""
         powers = []
         for r in range(self.power_table.rowCount()):
-            p_item = self.power_table.item(r, 1)
-            if p_item:
-                powers.append(float(p_item.data(Qt.ItemDataRole.UserRole)))
+            p_combo = self.power_table.cellWidget(r, 1)
+            if isinstance(p_combo, QComboBox):
+                val = p_combo.currentData()
+                if val is not None:
+                    powers.append(float(val))
         return powers
 
     def get_ps_stabilization_delay(self) -> float:
@@ -1715,6 +1950,20 @@ class AutomationPanel(QWidget):
             if isinstance(p_combo, QComboBox):
                 self._populate_power_combo(p_combo)
 
+        for r in range(self.power_table.rowCount()):
+            p_combo = self.power_table.cellWidget(r, 1)
+            if isinstance(p_combo, QComboBox):
+                self._populate_power_combo(p_combo)
+
+        # Update custom sequence power combo selections if they are active
+        if hasattr(self, 'custom_seq_table'):
+            for r in range(self.custom_seq_table.rowCount()):
+                p_combo = self.custom_seq_table.cellWidget(r, 2)
+                if isinstance(p_combo, QComboBox):
+                    act_combo = self.custom_seq_table.cellWidget(r, 1)
+                    if isinstance(act_combo, QComboBox) and act_combo.currentText() == "Polarizer Power (calibrated)":
+                        self._populate_power_combo(p_combo)
+
     def _reindex_heating_steps(self):
         """Update the Step # column for all rows."""
         self.heating_table.setSortingEnabled(False)
@@ -1732,7 +1981,6 @@ class AutomationPanel(QWidget):
         if not path: return
         
         try:
-            import csv
             with open(path, 'r') as f:
                 reader = csv.reader(f)
                 header = next(reader, None) # Skip header
@@ -1796,16 +2044,17 @@ class AutomationPanel(QWidget):
         if not path: return
         
         try:
-            import csv
             with open(path, 'w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(["Power (label)", "Power (W)", "Duration (s)"])
                 for r in range(self.heating_table.rowCount()):
                     p_combo = self.heating_table.cellWidget(r, 1)
-                    p_label = p_combo.currentText()
-                    p_w = p_combo.currentData()
-                    d = self.heating_table.cellWidget(r, 2).value()
-                    writer.writerow([p_label, p_w, d])
+                    d_spin = self.heating_table.cellWidget(r, 2)
+                    if isinstance(p_combo, QComboBox) and isinstance(d_spin, QDoubleSpinBox):
+                        p_label = p_combo.currentText()
+                        p_w = p_combo.currentData()
+                        d = d_spin.value()
+                        writer.writerow([p_label, p_w, d])
             QMessageBox.information(self, "Success", f"Sequence exported to {path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export sequence: {e}")
@@ -1819,12 +2068,14 @@ class AutomationPanel(QWidget):
         steps = []
         for r in range(self.heating_table.rowCount()):
             p_combo = self.heating_table.cellWidget(r, 1)
-            p_w = p_combo.currentData()
-            if p_w is None:
-                QMessageBox.warning(self, "Uncalibrated Power", f"Step {r+1} has no calibrated power selected.")
-                return
-            dur = self.heating_table.cellWidget(r, 2).value()
-            steps.append({'target_w': float(p_w), 'duration': dur})
+            d_spin = self.heating_table.cellWidget(r, 2)
+            if isinstance(p_combo, QComboBox) and isinstance(d_spin, QDoubleSpinBox):
+                p_w = p_combo.currentData()
+                if p_w is None:
+                    QMessageBox.warning(self, "Uncalibrated Power", f"Step {r+1} has no calibrated power selected.")
+                    return
+                dur = d_spin.value()
+                steps.append({'target_w': float(p_w), 'duration': dur})
         
         if not steps:
             QMessageBox.warning(self, "Empty Sequence", "Please add at least one heating step.")
@@ -1854,7 +2105,7 @@ class AutomationPanel(QWidget):
         meas_p_w = float(meas_p_w)
 
         # Data directory
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         data_dir = os.path.join(self.hw.config.get('paths', {}).get('data_root', './data'), f"heating_{timestamp}")
 
         # Metadata for the run
@@ -1897,7 +2148,9 @@ class AutomationPanel(QWidget):
         if step_idx >= 0:
             # Scroll to active row
             if 0 < step_idx <= self.heating_table.rowCount():
-                self.heating_table.scrollToItem(self.heating_table.item(step_idx-1, 0))
+                item = self.heating_table.item(step_idx-1, 0)
+                if item is not None:
+                    self.heating_table.scrollToItem(item)
         # Forward to monitor
         self.step_progress.emit(step_idx, status, percent)
         
@@ -1920,38 +2173,132 @@ class AutomationPanel(QWidget):
                 QMessageBox.critical(self, "Sequence Failed", message)
 
     def _on_generate_power_sweep(self):
-        """Generate a range of powers and populate the table."""
+        """Generate a range of powers from calibrated ones and populate the table."""
         start_w = self.ps_start_combo.currentData()
         end_w = self.ps_end_combo.currentData()
         steps = self.ps_steps_spin.value()
-        is_log = self.ps_log_check.isChecked()
 
         if start_w is None or end_w is None:
             QMessageBox.warning(self, "Incomplete Selection", "Please select both start and end powers from the calibrated list.")
             return
 
-        if is_log:
-            if start_w <= 0 or end_w <= 0:
-                QMessageBox.warning(self, "Invalid Log Sweep", "Logarithmic sweep requires powers > 0.")
-                return
-            powers = np.logspace(np.log10(start_w), np.log10(end_w), steps)
-        else:
-            powers = np.linspace(start_w, end_w, steps)
+        cal = self.hw.polarizer_calibration
+        if not cal or not cal.points:
+            QMessageBox.warning(self, "No Calibration", "No calibrated powers found. Please calibrate first.")
+            return
+
+        multipliers = {"nW": 1e-9, "µW": 1e-6, "mW": 1e-3}
+        # Get all points sorted by power in Watts
+        sorted_points = sorted(
+            [(p['power'] * multipliers.get(p['unit'], 1.0), p['power'], p['unit']) for p in cal.points],
+            key=lambda x: x[0]
+        )
+
+        min_w = min(start_w, end_w)
+        max_w = max(start_w, end_w)
+        epsilon = 1e-12
+        filtered = [pt for pt in sorted_points if min_w - epsilon <= pt[0] <= max_w + epsilon]
+
+        if start_w > end_w:
+            filtered.reverse()
+
+        if len(filtered) > steps:
+            # Downsample to get exactly the requested number of steps
+            indices = np.round(np.linspace(0, len(filtered) - 1, steps)).astype(int)
+            filtered = [filtered[idx] for idx in indices]
 
         self.power_table.setRowCount(0)
         self.power_table.setSortingEnabled(False)
-        for i, p in enumerate(powers):
-            row = self.power_table.rowCount()
-            self.power_table.insertRow(row)
-            
-            # Step #
-            self.power_table.setItem(row, 0, QTableWidgetItem(str(i+1)))
-            
-            # Power
-            p_item = QTableWidgetItem(format_power_w(p))
-            p_item.setData(Qt.ItemDataRole.UserRole, float(p))
-            self.power_table.setItem(row, 1, p_item)
+        self.power_table.blockSignals(True)
+        try:
+            for i, (p_w, p_val, p_unit) in enumerate(filtered):
+                row = self.power_table.rowCount()
+                self.power_table.insertRow(row)
+                
+                # Step # (non-editable)
+                step_item = QTableWidgetItem(str(i+1))
+                step_item.setFlags(step_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.power_table.setItem(row, 0, step_item)
+                
+                # Power Combo
+                p_combo = QComboBox()
+                self._populate_power_combo(p_combo)
+                # Select the generated power in the combo
+                idx = p_combo.findData(p_w)
+                if idx >= 0:
+                    p_combo.setCurrentIndex(idx)
+                self.power_table.setCellWidget(row, 1, p_combo)
+        finally:
+            self.power_table.blockSignals(False)
         
+        self.power_table.setSortingEnabled(True)
+
+    def _on_add_power_step(self):
+        # Insert at current row or at the end if no selection
+        row = self.power_table.currentRow()
+        if row < 0:
+            row = self.power_table.rowCount()
+        else:
+            row += 1 # Insert AFTER current row
+            
+        self.power_table.setSortingEnabled(False)
+        self.power_table.insertRow(row)
+        
+        # Step # (non-editable)
+        step_item = QTableWidgetItem()
+        step_item.setFlags(step_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.power_table.setItem(row, 0, step_item)
+        
+        # Power Combo
+        p_combo = QComboBox()
+        self._populate_power_combo(p_combo)
+        self.power_table.setCellWidget(row, 1, p_combo)
+        
+        # Re-index all steps
+        self._reindex_power_steps()
+        self.power_table.setSortingEnabled(True)
+
+    def _on_remove_power_step(self):
+        sel_model = self.power_table.selectionModel()
+        selected_rows = [r.row() for r in sel_model.selectedRows()] if sel_model is not None else []
+        if not selected_rows:
+            curr = self.power_table.currentRow()
+            if curr >= 0:
+                selected_rows = [curr]
+            else:
+                curr = self.power_table.rowCount() - 1
+                if curr >= 0:
+                    selected_rows = [curr]
+
+        if selected_rows:
+            self.power_table.setSortingEnabled(False)
+            self.power_table.blockSignals(True)
+            try:
+                for r in sorted(selected_rows, reverse=True):
+                    self.power_table.removeRow(r)
+            finally:
+                self.power_table.blockSignals(False)
+            self._reindex_power_steps()
+            self.power_table.setSortingEnabled(True)
+
+    def _on_clear_power_steps(self):
+        self.power_table.setRowCount(0)
+
+    def _reindex_power_steps(self):
+        """Update the Step # column for all rows in the power table."""
+        self.power_table.setSortingEnabled(False)
+        self.power_table.blockSignals(True)
+        try:
+            for r in range(self.power_table.rowCount()):
+                item = self.power_table.item(r, 0)
+                if not item:
+                    item = QTableWidgetItem()
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    self.power_table.setItem(r, 0, item)
+                item.setData(Qt.ItemDataRole.EditRole, r + 1)
+                item.setText(str(r + 1))
+        finally:
+            self.power_table.blockSignals(False)
         self.power_table.setSortingEnabled(True)
 
     def _on_run_power_series(self):
@@ -1960,18 +2307,14 @@ class AutomationPanel(QWidget):
             self.stop_sequence()
             return
 
-        powers = []
-        for r in range(self.power_table.rowCount()):
-            p_item = self.power_table.item(r, 1)
-            p_w = p_item.data(Qt.ItemDataRole.UserRole)
-            powers.append(float(p_w))
+        powers = self.get_power_series_steps()
 
         if not powers:
             QMessageBox.warning(self, "Empty Sequence", "Please generate a power sweep first.")
             return
 
         # Prepare directory and metadata
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         data_dir = os.path.join(self.hw.config.get('paths', {}).get('data_root', './data'), f"power_series_{timestamp}")
         
         # Use average power from first step as initial reference for metadata collection
@@ -1994,6 +2337,9 @@ class AutomationPanel(QWidget):
         self._worker.finished.connect(self._on_ps_finished)
         self._worker.measurement_ready.connect(self.measurement_ready.emit)
         
+        # Notify that sequence has started
+        self.sequence_started.emit(powers, powers[0], 1)
+        
         # Update UI state
         self.power_run_btn.setText("STOP POWER SERIES")
         self.power_run_btn.setStyleSheet("background-color: #c0392b; color: white; font-weight: bold;")
@@ -2005,7 +2351,9 @@ class AutomationPanel(QWidget):
     def _on_ps_progress(self, step_idx, status, percent):
         """Update the power table as the sequence progresses."""
         if 0 < step_idx <= self.power_table.rowCount():
-            self.power_table.scrollToItem(self.power_table.item(step_idx-1, 0))
+            item = self.power_table.item(step_idx-1, 0)
+            if item is not None:
+                self.power_table.scrollToItem(item)
         
         self.step_progress.emit(step_idx, status, percent)
 
@@ -2031,6 +2379,8 @@ class AutomationPanel(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         group.setLayout(layout)
         
+        max_limit = self._get_stage_physical_limit() - 5.0
+
         # --- Grid Definition ---
         grid_group = QGroupBox("Grid Settings")
         grid_group.setStyleSheet("QGroupBox { font-weight: normal; }")
@@ -2055,8 +2405,8 @@ class AutomationPanel(QWidget):
         shape_row2 = QHBoxLayout()
         self.map_diameter_label = QLabel("Diameter:")
         self.map_diameter_spin = QDoubleSpinBox()
-        self.map_diameter_spin.setRange(0.1, 500.0)
-        self.map_diameter_spin.setValue(45.0)
+        self.map_diameter_spin.setRange(0.1, max_limit)
+        self.map_diameter_spin.setValue(max_limit)
         self.map_diameter_spin.setSingleStep(1.0)
         self.map_diameter_spin.setSuffix(" mm")
         self.map_diameter_spin.setFixedWidth(100)
@@ -2071,7 +2421,6 @@ class AutomationPanel(QWidget):
         grid_layout.addWidget(shape_container)
         
         # Add vertical line separator
-        from ..qt import QFrame
         line = QFrame()
         line.setFrameShape(QFrame.Shape.VLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
@@ -2089,19 +2438,19 @@ class AutomationPanel(QWidget):
         x_lbl.setFixedWidth(85)
         x_row.addWidget(x_lbl)
         self.map_x_start = QDoubleSpinBox()
-        self.map_x_start.setRange(-100, 100)
+        self.map_x_start.setRange(0.0, max_limit)
         self.map_x_start.setFixedWidth(75)
         x_row.addWidget(self.map_x_start)
         x_row.addWidget(QLabel("to"))
         self.map_x_end = QDoubleSpinBox()
-        self.map_x_end.setRange(-100, 100)
+        self.map_x_end.setRange(0.0, max_limit)
         self.map_x_end.setFixedWidth(75)
         x_row.addWidget(self.map_x_end)
         
         x_row.addSpacing(10)
         x_row.addWidget(QLabel("Step (mm):"))
         self.map_x_step = QDoubleSpinBox()
-        self.map_x_step.setRange(0.001, 100)
+        self.map_x_step.setRange(0.001, max_limit)
         self.map_x_step.setValue(5.0)
         self.map_x_step.setSingleStep(1.0)
         self.map_x_step.setFixedWidth(75)
@@ -2115,19 +2464,19 @@ class AutomationPanel(QWidget):
         y_lbl.setFixedWidth(85)
         y_row.addWidget(y_lbl)
         self.map_y_start = QDoubleSpinBox()
-        self.map_y_start.setRange(-100, 100)
+        self.map_y_start.setRange(0.0, max_limit)
         self.map_y_start.setFixedWidth(75)
         y_row.addWidget(self.map_y_start)
         y_row.addWidget(QLabel("to"))
         self.map_y_end = QDoubleSpinBox()
-        self.map_y_end.setRange(-100, 100)
+        self.map_y_end.setRange(0.0, max_limit)
         self.map_y_end.setFixedWidth(75)
         y_row.addWidget(self.map_y_end)
         
         y_row.addSpacing(10)
         y_row.addWidget(QLabel("Step (mm):"))
         self.map_y_step = QDoubleSpinBox()
-        self.map_y_step.setRange(0.001, 100)
+        self.map_y_step.setRange(0.001, max_limit)
         self.map_y_step.setValue(5.0)
         self.map_y_step.setSingleStep(1.0)
         self.map_y_step.setFixedWidth(75)
@@ -2149,7 +2498,9 @@ class AutomationPanel(QWidget):
         self.map_table.setColumnCount(3)
         self.map_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.map_table.setHorizontalHeaderLabels(["Idx", "X (mm)", "Y (mm)"])
-        self.map_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        map_header = self.map_table.horizontalHeader()
+        if map_header is not None:
+            map_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.map_table.setMinimumWidth(200)
         content_splitter.addWidget(self.map_table)
 
@@ -2200,7 +2551,6 @@ class AutomationPanel(QWidget):
         self.map_diameter_spin.setVisible(False)
         
         # Initial map generation
-        from ..qt import QTimer
         QTimer.singleShot(0, self._on_generate_map)
 
         return group
@@ -2213,10 +2563,20 @@ class AutomationPanel(QWidget):
         self._update_map_spinbox_limits()
         self._on_generate_map()
 
+    def _get_stage_physical_limit(self) -> float:
+        """Get the stage physical limit from config, defaulting to 50.0 mm."""
+        hw_cfg = self.hw.config.get('hardware', {}).get('accessories', [])
+        # Find stage_x or stage_y limit
+        stage_cfg = next((c for c in hw_cfg if c['id'] in ('stage_x', 'stage_y')), None)
+        if stage_cfg:
+            return float(stage_cfg.get('physical_limit', 50.0))
+        return 50.0
+
     def _update_map_spinbox_limits(self):
         """Limit the mapping range spinboxes to the diameter if using circular mapping."""
         is_circle = self.map_shape_combo.currentText() == "Circle (Circular Window)"
-        limit = self.map_diameter_spin.value() if is_circle else 100.0
+        max_limit = self._get_stage_physical_limit() - 5.0
+        limit = self.map_diameter_spin.value() if is_circle else max_limit
         
         self.map_x_start.setMaximum(limit)
         self.map_x_end.setMaximum(limit)
@@ -2312,11 +2672,12 @@ class AutomationPanel(QWidget):
         for x, y in points:
             row = self.map_table.rowCount()
             self.map_table.insertRow(row)
-            self.map_table.setItem(row, 0, QTableWidgetItem(str(idx)))
-            self.map_table.setItem(row, 1, QTableWidgetItem(f"{x:.3f}"))
-            self.map_table.setItem(row, 2, QTableWidgetItem(f"{y:.3f}"))
+            self.map_table.setItem(row, 0, NumericTableWidgetItem(str(idx)))
+            self.map_table.setItem(row, 1, NumericTableWidgetItem(f"{x:.3f}"))
+            self.map_table.setItem(row, 2, NumericTableWidgetItem(f"{y:.3f}"))
             idx += 1
         self.map_table.setSortingEnabled(True)
+
 
         # Update the preview canvas
         is_circle = self.map_shape_combo.currentText() == "Circle (Circular Window)"
@@ -2371,7 +2732,7 @@ class AutomationPanel(QWidget):
             QMessageBox.warning(self, "Empty Map", "No valid coordinate points found in the grid table.")
             return
 
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         data_dir = os.path.join(self.hw.config.get('paths', {}).get('data_root', './data'), f"map_{timestamp}")
         
         metadata = self.hw.collect_metadata()
@@ -2406,7 +2767,9 @@ class AutomationPanel(QWidget):
 
     def _on_mapping_progress(self, idx, status, percent):
         if 0 < idx <= self.map_table.rowCount():
-            self.map_table.scrollToItem(self.map_table.item(idx-1, 0))
+            item = self.map_table.item(idx-1, 0)
+            if item is not None:
+                self.map_table.scrollToItem(item)
         
         self.step_progress.emit(idx, status, percent)
 
@@ -2422,6 +2785,408 @@ class AutomationPanel(QWidget):
             
         self.sequence_finished.emit(success, message)
 
+    def _create_custom_sequence_group(self) -> QGroupBox:
+        """Create controls for the generic custom sequence editor."""
+        group = QGroupBox("General Custom Sequence Editor")
+        group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        group.setLayout(layout)
+
+        # Toolbar
+        toolbar = QHBoxLayout()
+        
+        add_btn = QPushButton("+")
+        add_btn.setFixedWidth(30)
+        add_btn.clicked.connect(self._on_add_custom_step)
+        toolbar.addWidget(add_btn)
+        
+        remove_btn = QPushButton("-")
+        remove_btn.setFixedWidth(30)
+        remove_btn.clicked.connect(self._on_remove_custom_step)
+        toolbar.addWidget(remove_btn)
+        
+        clear_btn = QPushButton("Clear All")
+        clear_btn.setFixedWidth(80)
+        clear_btn.clicked.connect(self._on_clear_custom_steps)
+        toolbar.addWidget(clear_btn)
+        
+        toolbar.addSpacing(10)
+        
+        up_btn = QPushButton("Move Up")
+        up_btn.setFixedWidth(90)
+        up_btn.clicked.connect(self._on_move_up_custom_step)
+        toolbar.addWidget(up_btn)
+        
+        down_btn = QPushButton("Move Down")
+        down_btn.setFixedWidth(90)
+        down_btn.clicked.connect(self._on_move_down_custom_step)
+        toolbar.addWidget(down_btn)
+        
+        toolbar.addSpacing(10)
+        
+        import_btn = QPushButton("Import JSON")
+        import_btn.setFixedWidth(100)
+        import_btn.clicked.connect(self._on_import_custom_sequence)
+        toolbar.addWidget(import_btn)
+        
+        export_btn = QPushButton("Export JSON")
+        export_btn.setFixedWidth(100)
+        export_btn.clicked.connect(self._on_export_custom_sequence)
+        toolbar.addWidget(export_btn)
+        
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        # Table
+        self.custom_seq_table = QTableWidget()
+        self.custom_seq_table.setColumnCount(4)
+        self.custom_seq_table.setHorizontalHeaderLabels(["Step #", "Action", "Parameters", "Label/Comment"])
+        self.custom_seq_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.custom_seq_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        header = self.custom_seq_table.horizontalHeader()
+        if header is not None:
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.custom_seq_table.setMinimumHeight(200)
+        layout.addWidget(self.custom_seq_table)
+
+        # Start button (Hidden, same as others)
+        self.custom_run_btn = QPushButton("START CUSTOM SEQUENCE")
+        self.custom_run_btn.setFixedWidth(160)
+        self.custom_run_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
+        self.custom_run_btn.hide()
+        layout.addWidget(self.custom_run_btn)
+
+        return group
+
+    def _on_add_custom_step(self):
+        row = self.custom_seq_table.currentRow()
+        if row < 0:
+            row = self.custom_seq_table.rowCount()
+        else:
+            row += 1
+            
+        self.custom_seq_table.insertRow(row)
+        
+        # 1. Step # (non-editable)
+        step_item = QTableWidgetItem()
+        step_item.setFlags(step_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.custom_seq_table.setItem(row, 0, step_item)
+        
+        # 2. Action (ComboBox)
+        act_combo = QComboBox()
+        act_combo.addItems([
+            "Wait / Stabilize",
+            "Shutter (linked)",
+            "Polarizer Angle",
+            "Polarizer Power (calibrated)",
+            "Move Stage X",
+            "Move Stage Y",
+            "Collect Spectrum"
+        ])
+        act_combo.currentIndexChanged.connect(self._on_custom_action_changed)
+
+
+        self.custom_seq_table.setCellWidget(row, 1, act_combo)
+        
+        # 3. Parameters (Default is Wait/Stabilize: spinbox)
+        self._update_row_parameter_widget(row, "Wait / Stabilize")
+        
+        # 4. Comment / Label
+        comment_item = QTableWidgetItem("")
+        self.custom_seq_table.setItem(row, 3, comment_item)
+        
+        self._reindex_custom_steps()
+
+    def _on_custom_action_changed(self):
+        combo = self.sender()
+        if not isinstance(combo, QComboBox):
+            return
+        
+        # Find which row this combo belongs to
+        row = -1
+        for r in range(self.custom_seq_table.rowCount()):
+            if self.custom_seq_table.cellWidget(r, 1) == combo:
+                row = r
+                break
+                
+        if row >= 0:
+            action = combo.currentText()
+            self._update_row_parameter_widget(row, action)
+
+    def _update_row_parameter_widget(self, row: int, action: str):
+        max_limit = self._get_stage_physical_limit() - 5.0
+        
+        if action == "Wait / Stabilize":
+            spin = QDoubleSpinBox()
+            spin.setRange(0.0, 3600.0)
+            spin.setValue(1.0)
+            spin.setSuffix(" s")
+            self.custom_seq_table.setCellWidget(row, 2, spin)
+            
+        elif action == "Shutter (linked)":
+            combo = QComboBox()
+            combo.addItem("Open", True)
+            combo.addItem("Close", False)
+            self.custom_seq_table.setCellWidget(row, 2, combo)
+            
+        elif action == "Polarizer Angle":
+            spin = QDoubleSpinBox()
+            spin.setRange(0.0, 360.0)
+            spin.setValue(0.0)
+            spin.setSuffix(" °")
+            self.custom_seq_table.setCellWidget(row, 2, spin)
+            
+        elif action == "Polarizer Power (calibrated)":
+            combo = QComboBox()
+            self._populate_power_combo(combo)
+            self.custom_seq_table.setCellWidget(row, 2, combo)
+            
+        elif action in ("Move Stage X", "Move Stage Y"):
+            spin = QDoubleSpinBox()
+            spin.setRange(0.0, max_limit)
+            spin.setValue(0.0)
+            spin.setSuffix(" mm")
+            self.custom_seq_table.setCellWidget(row, 2, spin)
+            
+        elif action == "Collect Spectrum":
+            lbl = QLabel("[Andor Spectrometer]")
+            lbl.setStyleSheet("color: #7f8c8d; font-style: italic;")
+            self.custom_seq_table.setCellWidget(row, 2, lbl)
+
+    def _reindex_custom_steps(self):
+
+        for r in range(self.custom_seq_table.rowCount()):
+            item = self.custom_seq_table.item(r, 0)
+            if not item:
+                item = QTableWidgetItem()
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.custom_seq_table.setItem(r, 0, item)
+            item.setData(Qt.ItemDataRole.EditRole, r + 1)
+            item.setText(str(r + 1))
+
+    def _on_remove_custom_step(self):
+        sel_model = self.custom_seq_table.selectionModel()
+        selected_rows = [r.row() for r in sel_model.selectedRows()] if sel_model is not None else []
+        if not selected_rows:
+            curr = self.custom_seq_table.currentRow()
+            if curr >= 0:
+                selected_rows = [curr]
+            else:
+                curr = self.custom_seq_table.rowCount() - 1
+                if curr >= 0:
+                    selected_rows = [curr]
+                    
+        if selected_rows:
+            for r in sorted(selected_rows, reverse=True):
+                self.custom_seq_table.removeRow(r)
+            self._reindex_custom_steps()
+
+    def _on_clear_custom_steps(self):
+        self.custom_seq_table.setRowCount(0)
+
+    def _on_move_up_custom_step(self):
+        row = self.custom_seq_table.currentRow()
+        if row <= 0:
+            return
+        self._swap_custom_rows(row, row - 1)
+        self.custom_seq_table.setCurrentCell(row - 1, 1)
+
+    def _on_move_down_custom_step(self):
+        row = self.custom_seq_table.currentRow()
+        if row < 0 or row >= self.custom_seq_table.rowCount() - 1:
+            return
+        self._swap_custom_rows(row, row + 1)
+        self.custom_seq_table.setCurrentCell(row + 1, 1)
+
+    def _swap_custom_rows(self, r1: int, r2: int):
+        data1 = self._serialize_custom_row(r1)
+        data2 = self._serialize_custom_row(r2)
+        self._deserialize_custom_row(r1, data2)
+        self._deserialize_custom_row(r2, data1)
+        self._reindex_custom_steps()
+
+    def _serialize_custom_row(self, row: int) -> Dict[str, Any]:
+        act_combo = self.custom_seq_table.cellWidget(row, 1)
+        action = act_combo.currentText() if isinstance(act_combo, QComboBox) else "Wait / Stabilize"
+        
+        param_widget = self.custom_seq_table.cellWidget(row, 2)
+        params = {}
+        if action == "Wait / Stabilize" and isinstance(param_widget, QDoubleSpinBox):
+            params['duration'] = param_widget.value()
+        elif action == "Shutter (linked)" and isinstance(param_widget, QComboBox):
+            params['open'] = param_widget.currentData()
+        elif action == "Polarizer Angle" and isinstance(param_widget, QDoubleSpinBox):
+            params['angle'] = param_widget.value()
+        elif action == "Polarizer Power (calibrated)" and isinstance(param_widget, QComboBox):
+            params['power_w'] = param_widget.currentData()
+        elif action in ("Move Stage X", "Move Stage Y") and isinstance(param_widget, QDoubleSpinBox):
+            params['position'] = param_widget.value()
+            
+        comment = ""
+
+        c_item = self.custom_seq_table.item(row, 3)
+        if c_item:
+            comment = c_item.text()
+            
+        return {
+            'action': action,
+            'params': params,
+            'comment': comment
+        }
+
+    def _deserialize_custom_row(self, row: int, data: Dict[str, Any]):
+        # Temporarily block signals to prevent index changed loops
+        self.custom_seq_table.blockSignals(True)
+        try:
+            # Step #
+            step_item = QTableWidgetItem(str(row + 1))
+            step_item.setFlags(step_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.custom_seq_table.setItem(row, 0, step_item)
+            
+            # Action Combo
+            act_combo = QComboBox()
+            act_combo.addItems([
+                "Wait / Stabilize",
+                "Shutter (linked)",
+                "Polarizer Angle",
+                "Polarizer Power (calibrated)",
+                "Move Stage X",
+                "Move Stage Y",
+                "Collect Spectrum"
+            ])
+            act_combo.setCurrentText(data['action'])
+            act_combo.currentIndexChanged.connect(self._on_custom_action_changed)
+
+
+            self.custom_seq_table.setCellWidget(row, 1, act_combo)
+            
+            # Parameters Widget
+            self._update_row_parameter_widget(row, data['action'])
+            param_widget = self.custom_seq_table.cellWidget(row, 2)
+            
+            # Apply parameters
+            params = data.get('params', {})
+            action = data['action']
+            if action == "Wait / Stabilize" and isinstance(param_widget, QDoubleSpinBox):
+                if 'duration' in params: param_widget.setValue(params['duration'])
+            elif action == "Shutter (linked)" and isinstance(param_widget, QComboBox):
+                if 'open' in params:
+                    idx = param_widget.findData(params['open'])
+                    if idx >= 0: param_widget.setCurrentIndex(idx)
+            elif action == "Polarizer Angle" and isinstance(param_widget, QDoubleSpinBox):
+                if 'angle' in params: param_widget.setValue(params['angle'])
+            elif action == "Polarizer Power (calibrated)" and isinstance(param_widget, QComboBox):
+                if 'power_w' in params:
+                    idx = param_widget.findData(params['power_w'])
+                    if idx >= 0: param_widget.setCurrentIndex(idx)
+            elif action in ("Move Stage X", "Move Stage Y") and isinstance(param_widget, QDoubleSpinBox):
+                if 'position' in params: param_widget.setValue(params['position'])
+                
+            # Comment
+
+            comment_item = QTableWidgetItem(data.get('comment', ''))
+            self.custom_seq_table.setItem(row, 3, comment_item)
+        finally:
+            self.custom_seq_table.blockSignals(False)
+
+    def _on_export_custom_sequence(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export Custom Sequence", "", "JSON Files (*.json)")
+        if not path:
+            return
+        
+        steps = []
+        for r in range(self.custom_seq_table.rowCount()):
+            steps.append(self._serialize_custom_row(r))
+            
+        import json
+        try:
+            with open(path, 'w') as f:
+                json.dump(steps, f, indent=4)
+            QMessageBox.information(self, "Success", f"Custom sequence saved to {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save custom sequence: {e}")
+
+    def _on_import_custom_sequence(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Import Custom Sequence", "", "JSON Files (*.json)")
+        if not path:
+            return
+            
+        import json
+        try:
+            with open(path, 'r') as f:
+                steps = json.load(f)
+            
+            if not isinstance(steps, list):
+                raise ValueError("JSON must contain a list of steps.")
+                
+            self.custom_seq_table.setRowCount(0)
+            for r, step_data in enumerate(steps):
+                self.custom_seq_table.insertRow(r)
+                self._deserialize_custom_row(r, step_data)
+                
+            self._reindex_custom_steps()
+            QMessageBox.information(self, "Success", f"Imported {len(steps)} steps.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to import custom sequence: {e}")
+
+    def get_custom_sequence_steps(self) -> List[Dict[str, Any]]:
+        """Retrieve the currently defined custom sequence steps."""
+        steps = []
+        for r in range(self.custom_seq_table.rowCount()):
+            # Action (ComboBox)
+            act_combo = self.custom_seq_table.cellWidget(r, 1)
+            if not isinstance(act_combo, QComboBox): continue
+            action = act_combo.currentText()
+            
+            # Parameters
+            param_widget = self.custom_seq_table.cellWidget(r, 2)
+            params = {}
+            params_desc = ""
+            
+            if action == "Wait / Stabilize":
+                if isinstance(param_widget, QDoubleSpinBox):
+                    duration = param_widget.value()
+                    params['duration'] = duration
+                    params_desc = f"{duration:.2f} s"
+            elif action == "Shutter (linked)":
+                if isinstance(param_widget, QComboBox):
+                    state = param_widget.currentData()
+                    params['open'] = state
+                    params_desc = "Open" if state else "Close"
+            elif action == "Polarizer Angle":
+                if isinstance(param_widget, QDoubleSpinBox):
+                    angle = param_widget.value()
+                    params['angle'] = angle
+                    params_desc = f"{angle:.2f}°"
+            elif action == "Polarizer Power (calibrated)":
+                if isinstance(param_widget, QComboBox):
+                    p_w = param_widget.currentData()
+                    params['power_w'] = p_w
+                    params_desc = param_widget.currentText()
+            elif action in ("Move Stage X", "Move Stage Y"):
+                if isinstance(param_widget, QDoubleSpinBox):
+                    pos = param_widget.value()
+                    params['position'] = pos
+                    params_desc = f"{pos:.3f} mm"
+            elif action == "Collect Spectrum":
+                params_desc = "Capture Spectrum"
+                
+            # Comment / Label
+
+            comment = ""
+            comment_item = self.custom_seq_table.item(r, 3)
+            if comment_item:
+                comment = comment_item.text()
+                
+            steps.append({
+                'action': action,
+                'params': params,
+                'params_desc': params_desc,
+                'comment': comment
+            })
+        return steps
+
     def stop_sequence(self):
         """Public method to abort an active sequence."""
         if self._worker and self._worker.isRunning():
@@ -2433,3 +3198,6 @@ class AutomationPanel(QWidget):
             if hasattr(self, 'map_run_btn'):
                 self.map_run_btn.setText("STOPPING...")
                 self.map_run_btn.setEnabled(False)
+            if hasattr(self, 'custom_run_btn'):
+                self.custom_run_btn.setText("STOPPING...")
+                self.custom_run_btn.setEnabled(False)

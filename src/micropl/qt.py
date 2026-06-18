@@ -59,46 +59,10 @@ if platform.system() == "Darwin" and "MICROPL_QT_FIXED" not in os.environ:
         sys.stderr.write(f"Bridge fix failed: {e}\n")
 # -------------------------------------------------------
 
-logger = logging.getLogger(__name__)
+import typing
 
-# Preferred: PyQt6
-try:
+if typing.TYPE_CHECKING:
     from PyQt6 import QtWidgets, QtCore, QtGui
-    from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QCoreApplication
-    from PyQt6.QtGui import QAction
-    PYSIDE = False
-    PYQT = True
-except ImportError:
-    try:
-        from PySide6 import QtWidgets, QtCore, QtGui
-        from PySide6.QtCore import Signal as pyqtSignal, Slot as pyqtSlot, Qt, QCoreApplication
-        from PySide6.QtGui import QAction
-        PYSIDE = True
-        PYQT = False
-    except ImportError:
-        raise ImportError("No Qt6 binding (PyQt6 or PySide6) found.")
-
-# Post-import safety path enforcement
-if platform.system() == "Darwin":
-    p = os.environ.get("QT_QPA_PLATFORM_PLUGIN_PATH")
-    if p:
-        QCoreApplication.addLibraryPath(p)
-
-# Export common classes
-if PYSIDE:
-    from PySide6.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-        QTabWidget, QStatusBar, QMenuBar, QMenu, QPushButton, QLabel, 
-        QProgressBar, QGroupBox, QTextEdit, QDoubleSpinBox, QComboBox, 
-        QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
-        QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
-        QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
-        QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
-        QScrollArea, QToolButton
-    )
-    from PySide6.QtCore import QTimer, QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, Qt, QSize
-    from PySide6.QtGui import QAction, QImage, QPixmap, QIcon
-else:
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
         QTabWidget, QStatusBar, QMenuBar, QMenu, QPushButton, QLabel, 
@@ -107,62 +71,52 @@ else:
         QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
         QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
         QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
-        QScrollArea, QToolButton
+        QSizePolicy, QScrollArea, QToolButton
     )
-    from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt, QSize
+    from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt, QSize, QCoreApplication
     from PyQt6.QtGui import QAction, QImage, QPixmap, QIcon
+    PYSIDE = False
+    PYQT = True
+else:
+    # Preferred: PyQt6
+    try:
+        from PyQt6 import QtWidgets, QtCore, QtGui
+        from PyQt6.QtWidgets import (
+            QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+            QTabWidget, QStatusBar, QMenuBar, QMenu, QPushButton, QLabel, 
+            QProgressBar, QGroupBox, QTextEdit, QDoubleSpinBox, QComboBox, 
+            QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
+            QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
+            QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
+            QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
+            QSizePolicy, QScrollArea, QToolButton
+        )
+        from PyQt6.QtCore import QTimer, QThread, QObject, pyqtSignal, pyqtSlot, Qt, QSize, QCoreApplication
+        from PyQt6.QtGui import QAction, QImage, QPixmap, QIcon
+        PYSIDE = False
+        PYQT = True
+    except ImportError:
+        try:
+            from PySide6 import QtWidgets, QtCore, QtGui
+            from PySide6.QtWidgets import (
+                QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                QTabWidget, QStatusBar, QMenuBar, QMenu, QPushButton, QLabel, 
+                QProgressBar, QGroupBox, QTextEdit, QDoubleSpinBox, QComboBox, 
+                QGridLayout, QFrame, QSpinBox, QTableWidget, QTableWidgetItem,
+                QHeaderView, QToolBar, QFileDialog, QMessageBox, QSlider, QSplitter,
+                QLineEdit, QDialog, QDialogButtonBox, QCheckBox, QStackedWidget,
+                QButtonGroup, QPlainTextEdit, QListWidget, QListWidgetItem, QSplashScreen,
+                QSizePolicy, QScrollArea, QToolButton
+            )
+            from PySide6.QtCore import QTimer, QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, Qt, QSize, QCoreApplication
+            from PySide6.QtGui import QAction, QImage, QPixmap, QIcon
+            PYSIDE = True
+            PYQT = False
+        except ImportError:
+            raise ImportError("No Qt6 binding (PyQt6 or PySide6) found.")
 
-# Manual exports
-QApplication = QtWidgets.QApplication
-QMainWindow = QtWidgets.QMainWindow
-QWidget = QtWidgets.QWidget
-QVBoxLayout = QtWidgets.QVBoxLayout
-QHBoxLayout = QtWidgets.QHBoxLayout
-QTabWidget = QtWidgets.QTabWidget
-QStatusBar = QtWidgets.QStatusBar
-QMenuBar = QtWidgets.QMenuBar
-QMenu = QtWidgets.QMenu
-QPushButton = QtWidgets.QPushButton
-QLabel = QtWidgets.QLabel
-QProgressBar = QtWidgets.QProgressBar
-QGroupBox = QtWidgets.QGroupBox
-QTextEdit = QtWidgets.QTextEdit
-QDoubleSpinBox = QtWidgets.QDoubleSpinBox
-QComboBox = QtWidgets.QComboBox
-QGridLayout = QtWidgets.QGridLayout
-QFrame = QtWidgets.QFrame
-QTimer = QtCore.QTimer
-QSpinBox = QtWidgets.QSpinBox
-QTableWidget = QtWidgets.QTableWidget
-QTableWidgetItem = QtWidgets.QTableWidgetItem
-QHeaderView = QtWidgets.QHeaderView
-QToolBar = QtWidgets.QToolBar
-QFileDialog = QtWidgets.QFileDialog
-QMessageBox = QtWidgets.QMessageBox
-QSlider = QtWidgets.QSlider
-QImage = QtGui.QImage
-QPixmap = QtGui.QPixmap
-QLineEdit = QtWidgets.QLineEdit
-QDialog = QtWidgets.QDialog
-QDialogButtonBox = QtWidgets.QDialogButtonBox
-QCheckBox = QtWidgets.QCheckBox
-QStackedWidget = QtWidgets.QStackedWidget
-QButtonGroup = QtWidgets.QButtonGroup
-QPlainTextEdit = QtWidgets.QPlainTextEdit
-QSplitter = QtWidgets.QSplitter
-QThread = QtCore.QThread
-QObject = QtCore.QObject
-QListWidget = QtWidgets.QListWidget
-QListWidgetItem = QtWidgets.QListWidgetItem
-QSplashScreen = QtWidgets.QSplashScreen
-QSizePolicy = QtWidgets.QSizePolicy
-QScrollArea = QtWidgets.QScrollArea
-QToolButton = QtWidgets.QToolButton
-
-# Explicit exports for IDE linters
-pyqtSignal = pyqtSignal
-pyqtSlot = pyqtSlot
-Qt = Qt
-QAction = QAction
-QIcon = QtGui.QIcon
-QSize = QtCore.QSize
+# Post-import safety path enforcement
+if platform.system() == "Darwin":
+    p = os.environ.get("QT_QPA_PLATFORM_PLUGIN_PATH")
+    if p:
+        QCoreApplication.addLibraryPath(p)

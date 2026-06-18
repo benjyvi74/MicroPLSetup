@@ -5,8 +5,8 @@ Monochromator panel for controlling Horiba Monochromators.
 import logging
 import threading
 from ..qt import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QGroupBox, QDoubleSpinBox, QSpinBox, QComboBox,
+    QWidget, QHBoxLayout, QPushButton,
+    QLabel, QDoubleSpinBox, QSpinBox, QComboBox,
     QGridLayout, QFrame, Qt, QTimer, pyqtSlot, pyqtSignal,
     QApplication, QMessageBox
 )
@@ -34,8 +34,8 @@ class MonochromatorPanel(QWidget):
         self.display_name = mono_config.get('name', 'Monochromator')
         self._last_move_val = float(mono_config.get('center_wavelength', 500.0))
         self._last_move_unit = "nm"
-        self._last_ent_slit_val = int(mono_config.get('slit_width', 100))
-        self._last_exit_slit_val = int(mono_config.get('slit_width', 100))
+        self._last_ent_slit_val = float(mono_config.get('slit_width', 100))
+        self._last_exit_slit_val = float(mono_config.get('slit_width', 100))
         
         gratings = mono_config.get('gratings', [600, 1200, 1800])
         g_idx = int(mono_config.get('grating_idx', 1))
@@ -144,8 +144,8 @@ class MonochromatorPanel(QWidget):
 
         # Apply state defaults to UI
         self.pos_spin.setValue(self._last_move_val)
-        self.ent_slit_spin.setValue(self._last_ent_slit_val)
-        self.exit_slit_spin.setValue(self._last_exit_slit_val)
+        self.ent_slit_spin.setValue(int(self._last_ent_slit_val))
+        self.exit_slit_spin.setValue(int(self._last_exit_slit_val))
 
         row += 1
         # 5. Mirror Ports
@@ -253,7 +253,6 @@ class MonochromatorPanel(QWidget):
 
     def _on_connect_clicked(self):
         """Try to connect to the monochromator."""
-        from ..qt import QMessageBox
         
         mono = self.hw.mono
         if not mono:
@@ -303,8 +302,10 @@ class MonochromatorPanel(QWidget):
                 # but the HardwareWorker will eventually emit is_connected=False which will enable the button.
             finally:
                 self._connecting = False
-                # Re-enable button on UI thread
-                QTimer.singleShot(0, lambda: self.connect_btn.setEnabled(True))
+                # Re-enable button on UI thread via status signal
+                is_connected = mono.is_connected() if mono else False
+                status = "Connected" if is_connected else "Disconnected"
+                QTimer.singleShot(0, lambda: self.sig_status_changed.emit(status))
         
         threading.Thread(target=_connect_thread, daemon=True).start()
 

@@ -1,15 +1,29 @@
 import logging
-from ..qt import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QGroupBox, QDoubleSpinBox, QGridLayout, 
-    QFrame, Qt, QTimer, pyqtSlot, QDialog, QDialogButtonBox,
-    QThread, pyqtSignal, QComboBox, QApplication, QButtonGroup
-)
-import numpy as np
-import time
 import threading
+import time
+from typing import Optional, cast
 
+from ..hardware.kdc101 import ThorlabsKDC101
 from ..hardware.manager import HardwareManager
+from ..qt import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QThread,
+    QVBoxLayout,
+    QWidget,
+    Qt,
+    pyqtSignal,
+    pyqtSlot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +43,6 @@ class PowerSeeker(QThread):
         self.tolerance = tolerance
         self._running = True
         self.min_step = 0.05 # Minimum angle step for precision
-        self.max_step = 5.0  # Maximum test/initial step
 
     def stop(self):
         self._running = False
@@ -52,10 +65,10 @@ class PowerSeeker(QThread):
         return sum(readings) / len(readings)
 
     def run(self):
-        kdc = self.hw.polarizer
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
         pm = self.hw.get_instrument('pm100')
         
-        if not kdc or not kdc.is_connected():
+        if not polarizer or not polarizer.is_connected():
             self.finished.emit(False, "Motor not connected")
             return
         if not pm:
@@ -65,7 +78,7 @@ class PowerSeeker(QThread):
         try:
             # 1. Initial measurement (averaged to start from a stable baseline)
             current_p = self._read_average_power(pm, duration=0.5)
-            current_angle = kdc.get_position()
+            current_angle = polarizer.get_position()
             self.progress.emit(current_p, current_angle)
             
             error = abs(current_p - self.target_power)
@@ -78,16 +91,16 @@ class PowerSeeker(QThread):
             
             while self._running and error > (self.target_power * self.tolerance):
                 # Take a test step
-                kdc.move_by(direction * step_size)
+                polarizer.move_by(direction * step_size)
                 
                 # Wait for move to settle
                 time.sleep(0.3)
-                while kdc.is_moving() and self._running:
+                while polarizer.is_moving() and self._running:
                     time.sleep(0.1)
                 
                 # Measure averaged power
                 new_p = self._read_average_power(pm, duration=0.5)
-                new_angle = kdc.get_position()
+                new_angle = polarizer.get_position()
                 self.progress.emit(new_p, new_angle)
                 
                 new_error = abs(new_p - self.target_power)
@@ -120,12 +133,12 @@ class PowerSeeker(QThread):
             self.finished.emit(False, str(e))
 
 
-class KDC101SettingsDialog(QDialog):
-    """Dialog for KDC101 motor parameters."""
+class PolarizerSettingsDialog(QDialog):
+    """Dialog for polarizer motor parameters."""
 
     def __init__(self, parent=None, current_params=None):
         super().__init__(parent)
-        self.setWindowTitle("KDC101 Parameters")
+        self.setWindowTitle("Polarizer Parameters")
         self.setModal(True)
         
         self.params = current_params or {
@@ -180,7 +193,7 @@ class KDC101SettingsDialog(QDialog):
 
 class PolarizerPanel(QWidget):
     """
-    Dedicated control panel for the Thorlabs KDC101 Polarizer.
+    Dedicated control panel for the polarizer motor.
     Provides angle control and iterative power-seeking automation.
     """
     sig_status_changed = pyqtSignal(str)
@@ -190,15 +203,15 @@ class PolarizerPanel(QWidget):
         self.hw = HardwareManager()
         self.setMinimumWidth(340)
         self._params = {
-            'velocity': 1.0, 'acceleration': 1.0
+            'velocity': 1.0, 'acceleration': 1.0, 'zero_offset': 0.0
         }
         self._connecting = False # Guard flag for connection cycles
         self._init_ui()
         
         # Connect to Hardware Service signals
         service = self.hw.service
-        service.kdc_pos_changed.connect(self._on_pos_changed)
-        service.kdc_status_changed.connect(self._on_status_changed)
+        service.polarizer_pos_changed.connect(self._on_pos_changed)
+        service.polarizer_status_changed.connect(self._on_status_changed)
         
         # Internal state
         self._was_connected = False
@@ -212,13 +225,14 @@ class PolarizerPanel(QWidget):
 
     def _init_ui(self):
         """Initialize the user interface."""
-        self.setLayout(QVBoxLayout())
-        self.layout().setContentsMargins(10, 10, 10, 10)
+        self._main_layout = QVBoxLayout()
+        self.setLayout(self._main_layout)
+        self._main_layout.setContentsMargins(10, 10, 10, 10)
         
         group_layout = QGridLayout()
         group_layout.setContentsMargins(0, 0, 0, 0)
         group_layout.setSpacing(5)
-        self.layout().addLayout(group_layout)
+        self._main_layout.addLayout(group_layout)
 
         row = 0
         # 1. Status and Position (Combined)
@@ -357,7 +371,7 @@ class PolarizerPanel(QWidget):
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             
         # Final layout assembly
-        self.layout().addStretch()
+        self._main_layout.addStretch()
 
     def _update_controls_enabled(self, enabled: bool):
         """Enable or disable input controls."""
@@ -402,8 +416,8 @@ class PolarizerPanel(QWidget):
                 # We still do these one-off calls on the UI thread for now,
                 # but they only happen once on connection.
                 try:
-                    kdc = self.hw.polarizer
-                    if kdc:
+                    polarizer = self.hw.polarizer
+                    if polarizer:
                         self._read_hardware_params()
                         self._was_connected = True
                 except Exception as e:
@@ -418,13 +432,11 @@ class PolarizerPanel(QWidget):
             self._was_connected = False
 
     def _on_connect_clicked(self):
-        """Try to connect to the KDC101."""
-        from ..qt import QMessageBox
-        
-        kdc = self.hw.polarizer
-        if not kdc:
+        """Try to connect to the polarizer."""
+        polarizer = self.hw.polarizer
+        if not polarizer:
             try:
-                kdc = self.hw.initialize_instrument('polarizer', 'kdc101')
+                polarizer = self.hw.initialize_instrument('polarizer', 'kdc101')
             except Exception as e:
                 QMessageBox.critical(self, "Hardware Error", f"Failed to initialize polarizer driver:\n{e}")
                 return
@@ -434,10 +446,10 @@ class PolarizerPanel(QWidget):
         QApplication.processEvents()
         def _connect_thread():
             try:
-                kdc.connect()
-                logger.info("KDC101 connected via panel button")
+                polarizer.connect()
+                logger.info("Polarizer connected via panel button")
             except Exception as e:
-                logger.error(f"Failed to connect KDC101: {e}")
+                logger.error(f"Failed to connect polarizer: {e}")
                 # Similar to mono, we let the service handle status reporting
             finally:
                 self._connecting = False
@@ -446,49 +458,52 @@ class PolarizerPanel(QWidget):
 
     def _read_hardware_params(self):
         """Read current parameters from hardware."""
-        kdc = self.hw.polarizer
-        if kdc and kdc.is_connected():
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if polarizer and polarizer.is_connected():
             try:
-                v_params = kdc.get_velocity_params()
-                j_params = kdc.get_jog_parameters()
-                backlash = kdc.get_backlash()
+                v_params = polarizer.get_velocity_params()
                 
                 self._params = {
                     'velocity': v_params['max_velocity'],
-                    'acceleration': v_params['acceleration']
+                    'acceleration': v_params['acceleration'],
+                    'zero_offset': getattr(polarizer, 'zero_offset', 0.0)
                 }
-                logger.info(f"KDC101 hardware params synchronized: {self._params}")
+                logger.info(f"Polarizer hardware params synchronized: {self._params}")
             except Exception as e:
-                logger.error(f"Failed to read KDC101 params: {e}")
+                logger.error(f"Failed to read polarizer params: {e}")
                 # Don't overwrite existing params with defaults if we already had something
                 if not hasattr(self, '_params') or self._params is None:
-                    self._params = {'velocity': 1.0, 'acceleration': 1.0}
+                    self._params = {
+                        'velocity': 1.0,
+                        'acceleration': 1.0,
+                        'zero_offset': getattr(polarizer, 'zero_offset', 0.0) if polarizer else 0.0
+                    }
 
     def _on_parameters_clicked(self):
         """Open settings dialog."""
-        dialog = KDC101SettingsDialog(self, self._params)
+        dialog = PolarizerSettingsDialog(self, self._params)
         if dialog.exec():
             new_params = dialog.get_values()
-            kdc = self.hw.polarizer
-            if kdc:
+            polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+            if polarizer:
                 try:
-                    kdc.set_velocity(new_params['velocity'])
-                    kdc.set_acceleration(new_params['acceleration'])
-                    kdc.set_zero_offset(new_params['zero_offset'])
+                    polarizer.set_velocity(new_params['velocity'])
+                    polarizer.set_acceleration(new_params['acceleration'])
+                    polarizer.set_zero_offset(new_params['zero_offset'])
                     
                     # Immediately re-read from hardware to verify
                     logger.info("Re-reading parameters from hardware for verification")
                     self._read_hardware_params()
                 except Exception as e:
-                    logger.error(f"Failed to update KDC101 parameters: {e}")
+                    logger.error(f"Failed to update polarizer parameters: {e}")
 
     def _on_move_triggered(self):
         """Handle absolute move when input is finished (Enter or focus lost)."""
         val = self.target_spin.value()
         
         # Only move if the device is connected
-        kdc = self.hw.polarizer
-        if not kdc or not kdc.is_connected():
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if not polarizer or not polarizer.is_connected():
             return
 
         # Only move if the value has changed from our last move command
@@ -496,28 +511,28 @@ class PolarizerPanel(QWidget):
             return
 
         logger.info(f"Target angle changed to {val:.3f}°, triggering move.")
-        if kdc:
+        if polarizer:
             def _move():
                 try:
-                    kdc.move_to(val)
+                    polarizer.move_to(val)
                     self._last_move_val = val
-                    logger.info(f"KDC101 move to {val:.3f}° successful")
+                    logger.info(f"Polarizer move to {val:.3f}° successful")
                 except Exception as e:
-                    logger.error(f"KDC101 move failed: {e}")
+                    logger.error(f"Polarizer move failed: {e}")
             
             threading.Thread(target=_move, daemon=True).start()
 
     def _on_step_clicked(self, direction: int):
         """Handle relative move."""
-        kdc = self.hw.polarizer
-        if kdc:
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if polarizer:
             def _step():
                 try:
                     delta = direction * self.step_spin.value()
-                    kdc.move_by(delta)
-                    logger.info(f"KDC101 stepping by {delta}")
+                    polarizer.move_by(delta)
+                    logger.info(f"Polarizer stepping by {delta}")
                 except Exception as e:
-                    logger.error(f"KDC101 step failed: {e}")
+                    logger.error(f"Polarizer step failed: {e}")
             
             threading.Thread(target=_step, daemon=True).start()
 
@@ -527,18 +542,18 @@ class PolarizerPanel(QWidget):
             self._seeker.stop()
             logger.info("Power seeking aborted")
 
-        kdc = self.hw.polarizer
-        if kdc:
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if polarizer:
             try:
-                kdc.stop()
-                logger.info("KDC101 stopped")
+                polarizer.stop()
+                logger.info("Polarizer stopped")
             except Exception as e:
-                logger.error(f"KDC101 stop failed: {e}")
+                logger.error(f"Polarizer stop failed: {e}")
 
     def _on_home_clicked(self):
         """Perform homing on polarizer."""
-        kdc = self.hw.polarizer
-        if not kdc or not kdc.is_connected():
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if not polarizer or not polarizer.is_connected():
             return
 
         self.sig_status_changed.emit("Homing...")
@@ -546,11 +561,11 @@ class PolarizerPanel(QWidget):
         
         def do_home():
             try:
-                kdc.home()
+                polarizer.home()
             finally:
                 self.sig_status_changed.emit(self.get_current_status())
                 self.home_btn.setEnabled(True)
-
+        
         threading.Thread(target=do_home, daemon=True).start()
 
     def _on_seek_clicked(self):
@@ -589,36 +604,26 @@ class PolarizerPanel(QWidget):
             logger.warning(f"Power seek failed: {message}")
             self.sig_status_changed.emit("Seek Failed")
 
-    def get_current_status(self) -> str:
-        """Return a string representing the current connection/operational status."""
-        if not self.hw.get_instrument('kdc101').is_connected():
-            return "Disconnected"
-        if self._connecting:
-            return "Connecting"
-        if self._seeker and self._seeker.isRunning():
-            return "Seeking"
-        return "Connected"
-
     def update_panel(self):
         """Update UI from hardware state. Called periodically."""
-        kdc = self.hw.polarizer
-        if kdc:
-            is_connected = kdc.is_connected()
+        polarizer = cast(Optional[ThorlabsKDC101], self.hw.polarizer)
+        if polarizer:
+            is_connected = polarizer.is_connected()
             if is_connected and not self._connecting:
                 # Periodic position update if not moving/connecting
                 try:
-                    pos = kdc.get_position()
+                    pos = polarizer.get_position()
                     self.pos_label.setText(f"{pos:.3f}")
                 except:
                     pass
             
-            self._update_ui_state(is_connected)
+            self._update_controls_enabled(is_connected)
             self.sig_status_changed.emit(self.get_current_status())
 
     def get_current_status(self) -> str:
         """Return a string representing the current connection/operational status."""
-        kdc = self.hw.polarizer
-        if not kdc or not kdc.is_connected():
+        polarizer = self.hw.polarizer
+        if not polarizer or not polarizer.is_connected():
             return "Disconnected"
         if self._connecting:
             return "Connecting"

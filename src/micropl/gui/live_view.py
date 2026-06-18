@@ -4,22 +4,26 @@ Live view panel for real-time camera display.
 
 import time
 import logging
+import os
+from datetime import datetime
+from typing import Optional, cast
 from pathlib import Path
 import numpy as np
 from ..qt import (
-    QScrollArea,
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QGroupBox, QDoubleSpinBox, QComboBox,
-    QSpinBox, QGridLayout, Qt, QTimer, QImage, QPixmap,
-    QLineEdit, QFrame, QMenu, QStackedWidget, QApplication,
-    QCheckBox, QMessageBox, QFileDialog, QDialog, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, pyqtSignal, pyqtSlot, QtGui,
-    QIcon, QSize
+    QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, 
+    QPushButton, QLabel, QGroupBox, QDoubleSpinBox, 
+    QComboBox, QSpinBox, Qt, QTimer, QLineEdit, 
+    QFrame, QMenu, QStackedWidget, QApplication, 
+    QCheckBox, QMessageBox, QFileDialog, QDialog,
+    QSizePolicy, pyqtSignal, pyqtSlot,
+    QIcon, QSize, QThread
 )
 import threading
 
 from .plot import PlotWidget, ImagePlotWidget, CoordinateWidget
 from ..core.measurement import MeasurementResult
+from ..core.data_manager import DataManager
+from ..hardware.andor_camera import AndorCamera
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +47,18 @@ class LiveView(QWidget):
         self.hw = HardwareManager()
         self.background_frame = None
         self._acquiring = False
-        self._active_camera_id = None
+        self._active_camera_id: Optional[str] = None
         self.camera_panels = {}
         
         # Connect to Hardware Service signals
         service = self.hw.service
         service.camera_frame_ready.connect(self._on_camera_frame)
         service.camera_temp_changed.connect(self._on_camera_temp)
+        service.camera_status_changed.connect(self._on_camera_status_changed)
         service.mono_status_changed.connect(self._on_mono_status_changed)
         service.spectral_unit_changed.connect(self._on_spectral_unit_changed)
         service.spectral_display_mode_changed.connect(self._on_spectral_mode_changed)
+
         
         self._background_exposure = None 
         self._background_camera_id = None 
@@ -65,6 +71,7 @@ class LiveView(QWidget):
         self._last_data_mode = None
         self._is_showing_mismatch_msg = False # Guard to prevent multiple modal popups
         self._last_exposure_ms = None # Track last set value to avoid direct-type updates
+        self._seq_worker: Optional[QThread] = None
         
         # Caching for spectral axis to avoid expensive hardware calls every frame
         self._spectral_x_cache = None
@@ -78,14 +85,14 @@ class LiveView(QWidget):
         logger.info("Live view initialized (Signal-driven)")
 
 
-    def _get_current_camera_id(self) -> str:
+    def _get_current_camera_id(self) -> Optional[str]:
         """Return the camera ID that corresponds to the active camera card."""
         return self._active_camera_id
 
     @property
-    def current_camera(self):
+    def current_camera(self) -> Optional[AndorCamera]:
         """Dynamic reference to the currently selected camera object."""
-        return self.hw.get_camera(self._active_camera_id) if self._active_camera_id else None
+        return cast(Optional[AndorCamera], self.hw.get_camera(self._active_camera_id)) if self._active_camera_id else None
     def _init_ui(self):
         """Initialize the user interface."""
         layout = QVBoxLayout()
@@ -162,7 +169,6 @@ class LiveView(QWidget):
         seq_layout.setSpacing(2) # Compact
         
         btn_row = QHBoxLayout()
-        import os
         assets_dir = os.path.join(os.path.dirname(__file__), "assets")
         self.icon_play = QIcon(os.path.join(assets_dir, "play_button.png"))
         self.icon_pause = QIcon(os.path.join(assets_dir, "pause_button.png"))
@@ -176,15 +182,23 @@ class LiveView(QWidget):
         self.run_menu = QMenu(self)
         
         action_heating = self.run_menu.addAction("Laser Heating")
+        assert action_heating is not None
         action_heating.triggered.connect(self._on_run_sequence_clicked)
         
         action_power = self.run_menu.addAction("Power Series")
+        assert action_power is not None
         action_power.triggered.connect(self._on_run_power_series_clicked)
         
         action_mapping = self.run_menu.addAction("XY Mapping")
+        assert action_mapping is not None
         action_mapping.triggered.connect(self._on_run_mapping_clicked)
         
+        action_custom = self.run_menu.addAction("Custom Sequence")
+        assert action_custom is not None
+        action_custom.triggered.connect(self._on_run_custom_sequence_clicked)
+        
         self.run_sequence_btn.setMenu(self.run_menu)
+
 
         self.pause_resume_btn = QPushButton()
         self.pause_resume_btn.setIcon(self.icon_pause)
@@ -504,7 +518,7 @@ class LiveView(QWidget):
 
     def _on_card_temp_changed(self, camera_id: str, temp: float):
         """Forward set temperature from card to hardware."""
-        cam = self.hw.get_camera(camera_id)
+        cam = cast(Optional[AndorCamera], self.hw.get_camera(camera_id))
         if cam and cam.is_connected():
             try:
                 cam.set_temperature(temp)
@@ -587,7 +601,11 @@ class LiveView(QWidget):
         layout.addStretch()
 
         self.logs_btn = QPushButton("Show Logs")
-        self.logs_btn.clicked.connect(lambda: self.window().show_logs())
+        def show_logs():
+            win = self.window()
+            if win and hasattr(win, 'show_logs'):
+                win.show_logs()
+        self.logs_btn.clicked.connect(show_logs)
         layout.addWidget(self.logs_btn)
 
         return group
@@ -615,15 +633,49 @@ class LiveView(QWidget):
                 meta['Camera'] = {}
         return meta
 
+    def _get_safe_save_dir(self, base_dir: str, prefix: str) -> Optional[str]:
+        """
+        Check if base_dir is not empty. If it contains files, ask the user if they want
+        to create a new timestamped subfolder or overwrite existing data.
+        """
+        if not os.path.exists(base_dir):
+            return base_dir
+            
+        try:
+            # Check if there are any files or directories inside base_dir
+            has_files = any(os.scandir(base_dir))
+        except Exception:
+            has_files = False
+            
+        if has_files:
+            reply = QMessageBox.question(
+                self, "Directory Not Empty",
+                f"The directory '{base_dir}' already contains files.\n\n"
+                "Do you want to create a new timestamped subfolder to avoid overwriting your previous data?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Cancel:
+                return None
+            elif reply == QMessageBox.StandardButton.Yes:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                new_dir = os.path.join(base_dir, f"{prefix}_{timestamp}")
+                return new_dir
+                
+        return base_dir
+
     def _on_run_sequence_clicked(self):
         """Handle 'Run Heating Sequence' button click."""
         main_window = self.window()
         from .automation_panel import AutomationPanel, LaserHeatingWorker
         from .sequence_dialog import SequenceSummaryDialog
         
-        automation_panel = main_window.findChild(AutomationPanel)
-        if not automation_panel and hasattr(main_window, 'automation_panel'):
-            automation_panel = main_window.automation_panel
+        automation_panel = None
+        if main_window:
+            automation_panel = main_window.findChild(AutomationPanel)
+            if not automation_panel and hasattr(main_window, 'automation_panel'):
+                automation_panel = main_window.automation_panel
         
         if not automation_panel:
             QMessageBox.warning(self, "Error", "Could not find Automation Panel.")
@@ -660,6 +712,9 @@ class LiveView(QWidget):
             bg_meta['Objective'] = self.objective_box.currentText()
             
             save_dir = self.save_path_edit.text()
+            save_dir = self._get_safe_save_dir(save_dir, "heating")
+            if not save_dir:
+                return
             processing_mode = self.hw.data_processing_mode
 
             # 2. Start Worker
@@ -703,9 +758,11 @@ class LiveView(QWidget):
         main_window = self.window()
         from .automation_panel import AutomationPanel, PowerSeriesWorker
         
-        automation_panel = main_window.findChild(AutomationPanel)
-        if not automation_panel and hasattr(main_window, 'automation_panel'):
-            automation_panel = main_window.automation_panel
+        automation_panel = None
+        if main_window:
+            automation_panel = main_window.findChild(AutomationPanel)
+            if not automation_panel and hasattr(main_window, 'automation_panel'):
+                automation_panel = main_window.automation_panel
         
         if not automation_panel:
             QMessageBox.warning(self, "Error", "Could not find Automation Panel.")
@@ -735,6 +792,9 @@ class LiveView(QWidget):
             bg_meta['Objective'] = self.objective_box.currentText()
             
             save_dir = self.save_path_edit.text()
+            save_dir = self._get_safe_save_dir(save_dir, "power_series")
+            if not save_dir:
+                return
             processing_mode = self.hw.data_processing_mode
             stab_delay = automation_panel.get_ps_stabilization_delay()
 
@@ -749,8 +809,8 @@ class LiveView(QWidget):
             self._seq_worker.finished.connect(self._on_seq_finished)
             self._seq_worker.measurement_ready.connect(self._on_seq_measurement)
             
-            # Notify monitor (mock heating list for compat)
-            self.sequence_started.emit([], powers[0], 0)
+            # Notify monitor
+            self.sequence_started.emit(powers, powers[0], 1)
             
             # UI State
             self.run_sequence_btn.setEnabled(False)
@@ -775,9 +835,11 @@ class LiveView(QWidget):
         main_window = self.window()
         from .automation_panel import AutomationPanel, MappingWorker
         
-        automation_panel = main_window.findChild(AutomationPanel)
-        if not automation_panel and hasattr(main_window, 'automation_panel'):
-            automation_panel = main_window.automation_panel
+        automation_panel = None
+        if main_window:
+            automation_panel = main_window.findChild(AutomationPanel)
+            if not automation_panel and hasattr(main_window, 'automation_panel'):
+                automation_panel = main_window.automation_panel
             
         if not automation_panel:
             QMessageBox.warning(self, "Error", "Could not find Automation Panel.")
@@ -807,10 +869,7 @@ class LiveView(QWidget):
 
         # Prepare Execution
         try:
-            import datetime
-            import os
-            
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             data_dir = os.path.join(self.hw.config.get('paths', {}).get('data_root', './data'), f"map_{timestamp}")
             
             bg_meta = self._get_filtered_metadata()
@@ -861,7 +920,90 @@ class LiveView(QWidget):
             self.run_sequence_btn.setEnabled(True)
             self.run_sequence_btn.setText("Start Sequence")
 
+    def _on_run_custom_sequence_clicked(self):
+        """Handle 'Run Custom Sequence' button click."""
+        main_window = self.window()
+        from .automation_panel import AutomationPanel, CustomSequenceWorker
+        from .sequence_dialog import CustomSequenceSummaryDialog
+        
+        automation_panel = None
+        if main_window:
+            automation_panel = main_window.findChild(AutomationPanel)
+            if not automation_panel and hasattr(main_window, 'automation_panel'):
+                automation_panel = main_window.automation_panel
+        
+        if not automation_panel:
+            QMessageBox.warning(self, "Error", "Could not find Automation Panel.")
+            return
+
+        steps = automation_panel.get_custom_sequence_steps()
+        if not steps:
+            QMessageBox.warning(self, "Empty Sequence", "The custom sequence is empty.")
+            return
+
+        dlg = CustomSequenceSummaryDialog(steps, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        # Prepare Execution
+        try:
+            # 1. Collect Full Metadata
+            bg_meta = self._get_filtered_metadata()
+            
+            # Convert UI manual power to W for metadata consistency
+            p_val = self.manual_power_spin.value()
+            p_unit = self.power_unit_combo.currentText()
+            manual_power_w = p_val * (1e-3 if p_unit == "mW" else 1e-6 if p_unit == "µW" else 1e-9)
+            
+            bg_meta['Laser'] = {
+                'Wavelength (nm)': self.laser_wl_box.value(),
+                'Mode': self.laser_mode_combo.currentText(),
+                'Excitation Power (W)': manual_power_w,
+            }
+            bg_meta['Sample Temperature (K)'] = self.sample_temp_box.value()
+            bg_meta['Objective'] = self.objective_box.currentText()
+            
+            save_dir = self.save_path_edit.text()
+            save_dir = self._get_safe_save_dir(save_dir, "custom")
+            if not save_dir:
+                return
+            processing_mode = self.hw.data_processing_mode
+
+            # 2. Start Worker
+            self._seq_worker = CustomSequenceWorker(
+                self.hw, steps, save_dir, 
+                metadata=bg_meta,
+                background=self.background_frame,
+                background_exposure=self._background_exposure,
+                processing_mode=processing_mode
+            )
+            self._seq_worker.progress.connect(self._on_seq_progress)
+            self._seq_worker.measurement_ready.connect(self._on_seq_measurement)
+            self._seq_worker.finished.connect(self._on_seq_finished)
+            
+            # Notify Monitor
+            self.sequence_started.emit(steps, 0.0, 1)
+            
+            # UI State
+            self.run_sequence_btn.setEnabled(False)
+            self.run_sequence_btn.setText("Custom Running...")
+            self.pause_resume_btn.setEnabled(True)
+            self.pause_resume_btn.setIcon(self.icon_pause)
+            self.pause_resume_btn.setToolTip("Pause Sequence")
+            self.abort_sequence_btn.setEnabled(True)
+            self.bg_status_label.setText("SEQUENCE RUNNING")
+            self.bg_status_label.setStyleSheet("color: red; font-weight: bold;")
+            
+            self._seq_worker.start()
+            
+        except Exception as e:
+            logger.error(f"Failed to start custom sequence: {e}")
+            self.run_sequence_btn.setEnabled(True)
+            self.run_sequence_btn.setText("Start Sequence")
+            QMessageBox.critical(self, "Error", f"Failed to start sequence: {e}")
+
     def _on_seq_progress(self, step_idx, status, percent):
+
         """Update UI with sequence progress."""
         logger.info(f"Sequence: {status}")
         # Forward to monitor
@@ -879,14 +1021,14 @@ class LiveView(QWidget):
 
         if self.pause_resume_btn.toolTip() == "Pause Sequence":
             if hasattr(self._seq_worker, 'pause'):
-                self._seq_worker.pause()
+                getattr(self._seq_worker, 'pause')()
             self.pause_resume_btn.setIcon(self.icon_play)
             self.pause_resume_btn.setToolTip("Resume Sequence")
             self.bg_status_label.setText("SEQUENCE PAUSED")
             self.bg_status_label.setStyleSheet("color: orange; font-weight: bold;")
         else:
             if hasattr(self._seq_worker, 'resume'):
-                self._seq_worker.resume()
+                getattr(self._seq_worker, 'resume')()
             self.pause_resume_btn.setIcon(self.icon_pause)
             self.pause_resume_btn.setToolTip("Pause Sequence")
             self.bg_status_label.setText("SEQUENCE RUNNING")
@@ -897,7 +1039,7 @@ class LiveView(QWidget):
             return
             
         if hasattr(self._seq_worker, 'stop'):
-            self._seq_worker.stop()
+            getattr(self._seq_worker, 'stop')()
             
         QMessageBox.information(self, "Sequence Aborted", "The sequence has been aborted.")
         
@@ -926,13 +1068,14 @@ class LiveView(QWidget):
     def stop_sequence(self):
         """Public method to abort an active sequence."""
         if hasattr(self, '_seq_worker') and self._seq_worker and self._seq_worker.isRunning():
-            self._seq_worker.stop()
+            if hasattr(self._seq_worker, 'stop'):
+                getattr(self._seq_worker, 'stop')()
 
     def pause_sequence(self):
         """Public method to pause the active sequence (called from measurement panel)."""
         if hasattr(self, '_seq_worker') and self._seq_worker and self._seq_worker.isRunning():
             if hasattr(self._seq_worker, 'pause'):
-                self._seq_worker.pause()
+                getattr(self._seq_worker, 'pause')()
             self.pause_resume_btn.setIcon(self.icon_play)
             self.pause_resume_btn.setToolTip("Resume Sequence")
             self.bg_status_label.setText("SEQUENCE PAUSED")
@@ -942,7 +1085,7 @@ class LiveView(QWidget):
         """Public method to resume a paused sequence (called from measurement panel)."""
         if hasattr(self, '_seq_worker') and self._seq_worker and self._seq_worker.isRunning():
             if hasattr(self._seq_worker, 'resume'):
-                self._seq_worker.resume()
+                getattr(self._seq_worker, 'resume')()
             self.pause_resume_btn.setIcon(self.icon_pause)
             self.pause_resume_btn.setToolTip("Pause Sequence")
             self.bg_status_label.setText("SEQUENCE RUNNING")
@@ -1074,7 +1217,6 @@ class LiveView(QWidget):
 
     def _on_browse_clicked(self):
         """Open a directory browser."""
-        from ..qt import QFileDialog
         path = QFileDialog.getExistingDirectory(self, "Select Save Directory", self.save_path_edit.text())
         if path:
             self.save_path_edit.setText(path)
@@ -1091,26 +1233,30 @@ class LiveView(QWidget):
         
         def _connect_thread():
             try:
-                # Use the provided camera_id directly
-                if not self.hw.get_camera(camera_id):
+                cam = cast(Optional[AndorCamera], self.hw.get_camera(camera_id))
+                if not cam:
                     cam_cfg = self.hw.get_camera_config(camera_id)
                     self.hw.initialize_instrument(camera_id, cam_cfg.get('driver', 'andor_camera'), cam_cfg)
-                self.hw.get_camera(camera_id).connect()
-                logger.info(f"{camera_id} camera connected successfully")
+                    cam = cast(Optional[AndorCamera], self.hw.get_camera(camera_id))
+                if cam:
+                    cam.connect()
+                    logger.info(f"{camera_id} camera connected successfully")
+                else:
+                    raise RuntimeError(f"Could not initialize camera {camera_id}")
             except Exception as e:
                 logger.error(f"Failed to connect {camera_id} camera: {e}")
             finally:
                 # Re-enable button and notify UI for cleanup
-                QTimer.singleShot(0, lambda: card.connect_btn.setEnabled(True))
+                if card:
+                    QTimer.singleShot(0, lambda: card.connect_btn.setEnabled(True))
                 self.sig_cam_connect_done.emit(camera_id)
         
-        import threading
         threading.Thread(target=_connect_thread, daemon=True).start()
 
     @pyqtSlot(str)
     def _on_cam_connection_finished(self, camera_id: str):
         """Update UI after camera connection attempt."""
-        cam = self.hw.get_camera(camera_id)
+        cam = cast(Optional[AndorCamera], self.hw.get_camera(camera_id))
         is_connected = cam.is_connected() if cam else False
         
         card = self.camera_panels.get(camera_id)
@@ -1121,7 +1267,7 @@ class LiveView(QWidget):
         if camera_id == getattr(self, '_active_camera_id', None):
             self._update_camera_controls_enabled(is_connected)
             
-            if is_connected:
+            if cam and is_connected:
                 # Sync settings from hardware
                 roi = cam.get_roi()
                 actual_size = cam.get_detector_size()
@@ -1255,10 +1401,8 @@ class LiveView(QWidget):
             self.image_plot.auto_scale_all()
             self.spectrum_plot.auto_scale_all()
         else:
-            # Note: We don't explicitly disable it here because the user's zoom 
-            # will naturally disable it, which triggers the signal to uncheck this.
-            # But if they uncheck it manually, we can just leave the current range as is.
-            pass
+            # Explicitly disable auto-scaling on the spectrum plot if unchecked manually
+            self.spectrum_plot.disable_auto_scale()
 
     def _auto_scale_now(self):
         """Immediately trigger auto-scale on active plot."""
@@ -1379,7 +1523,7 @@ class LiveView(QWidget):
         self.live_btn.blockSignals(False)
         logger.info("Live view stopped")
 
-    def apply_roi(self, camera_id: str = None):
+    def apply_roi(self, camera_id: Optional[str] = None):
         """Apply ROI settings to the current camera."""
         if not self.current_camera or not self.current_camera.is_connected():
             return
@@ -1506,8 +1650,6 @@ class LiveView(QWidget):
             image = self.current_camera.acquire_image()
             
             # 4. Prepare MeasurementResult
-            from ..core.measurement import MeasurementResult
-            from datetime import datetime
             
             # Calculate spectral x-axis if in Spectrum mode
             view_mode = "Image" if self.display_stack.currentIndex() == 0 else "Spectrum"
@@ -1521,7 +1663,6 @@ class LiveView(QWidget):
             )
             
             # 5. Determine save path via Dialog
-            from ..qt import QFileDialog
             folder = Path(self.save_path_edit.text())
             timestamp_str = result.timestamp.strftime("%Y%m%d_%H%M%S")
             
@@ -1543,7 +1684,6 @@ class LiveView(QWidget):
             save_path = Path(path)
             
             # 6. Save based on mode
-            from ..core.data_manager import DataManager
             dm = DataManager(data_root=str(save_path.parent))
             if view_mode == "Spectrum":
                 # Prepare for processing
@@ -1573,7 +1713,6 @@ class LiveView(QWidget):
             logger.error(f"Failed to save snapshot: {e}")
             # Ensure we try to resume even on error
                 
-            from ..qt import QMessageBox
             QMessageBox.critical(self, "Save Failed", f"Could not save data:\n{e}")
 
     def update_set_temperature(self, temp):
@@ -1627,7 +1766,7 @@ class LiveView(QWidget):
 
             if force_nm:
                 # We don't cache force_nm requests as they are rare (usually only for save)
-                return x_nm
+                return cast(np.ndarray, x_nm)
 
             # Convert to desired view unit
             final_x = x_nm
@@ -1637,10 +1776,10 @@ class LiveView(QWidget):
                 final_x = 1e7 / x_nm
             
             # Update cache
-            self._spectral_x_cache = final_x
+            self._spectral_x_cache = cast(np.ndarray, final_x)
             self._spectral_x_cache_key = cache_key
             
-            return final_x
+            return cast(np.ndarray, final_x)
             
         except Exception as e:
             logger.debug(f"Spectral sync failed: {e}")
@@ -1678,7 +1817,6 @@ class LiveView(QWidget):
             self.bg_status_label.setStyleSheet("color: #e74c3c; font-size: 10px; font-weight: bold;")
 
             # 3. Show modal popup to the user (deferred slightly to ensure clean rendering)
-            from ..qt import QTimer
             msg = (f"The current exposure ({current_ms} ms) does not match the background exposure ({self._background_exposure} ms).\n\n"
                   "Data mode has been reset to Raw Data to avoid incorrect background subtraction.")
             
@@ -1727,6 +1865,15 @@ class LiveView(QWidget):
         if card:
             card.update_temperature(temp, status, self._acquiring)
 
+    @pyqtSlot(str, bool)
+    def _on_camera_status_changed(self, camera_id: str, is_connected: bool):
+        """Handle dynamic camera connection/disconnection notifications."""
+        card = self.camera_panels.get(camera_id)
+        if card:
+            card.update_connection_state(is_connected, False)
+        if camera_id == getattr(self, '_active_camera_id', None):
+            self._update_camera_controls_enabled(is_connected)
+
     def _on_processing_mode_changed(self, mode):
         """Sync processing mode to hardware manager."""
         self.hw.data_processing_mode = mode
@@ -1734,7 +1881,7 @@ class LiveView(QWidget):
 
     def display_image(self, image: np.ndarray):
         """Display image on screen."""
-        self.image_plot.imshow(image)
+        self.image_plot.imshow(image, auto_levels=self.auto_all_btn.isChecked())
 
     def _handle_new_frame(self, image):
         """Process and display a newly acquired frame."""
@@ -1746,7 +1893,7 @@ class LiveView(QWidget):
             
             # Temporary result for processing
             res = MeasurementResult(
-                timestamp=time.time(), # Not used for display
+                timestamp=datetime.now(), # Not used for display
                 integration_time=self._last_exposure_ms / 1000.0 if self._last_exposure_ms else self.exposure_box.value() / 1000.0,
                 intensities=image,
                 background=self.background_frame,
@@ -1755,6 +1902,7 @@ class LiveView(QWidget):
             
             res.process(self.hw.data_processing_mode)
             image = res.intensities
+            assert image is not None
             
             if "Exposure Mismatch" in res.metadata.get('Processing', ''):
                 # Just update status label, don't trigger modal popups or restarts during live view
@@ -1796,9 +1944,9 @@ class LiveView(QWidget):
                 self._update_axis_labels()
                     
                 self.spectrum_plot.update_plot(x, spectrum)
-            # Perform continuous auto-scaling is now handled natively by PyQtGraph
-            # we no longer need to call _auto_scale_now() every frame, which avoids
-            # the race condition where hardware updates override manual zoom.
+            # Perform continuous auto-scaling if enabled
+            if self.auto_all_btn.isChecked():
+                self._auto_scale_now()
 
             # 3. Unit Switching based on Monochromator connection
             mono = self.hw.mono
