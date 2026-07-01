@@ -14,8 +14,9 @@ from ..qt import (
     QFrame, pyqtSignal, Qt, QSizePolicy,
     QMenu, QApplication, QToolButton
 )
-from PyQt6.QtGui import QDrag, QPainter, QColor
-from PyQt6.QtCore import QMimeData, QEvent
+from ..qt import QtGui, QtCore
+QDrag, QPainter, QColor = QtGui.QDrag, QtGui.QPainter, QtGui.QColor
+QMimeData, QEvent = QtCore.QMimeData, QtCore.QEvent
 
 logger = logging.getLogger(__name__)
 

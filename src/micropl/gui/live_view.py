@@ -669,7 +669,7 @@ class LiveView(QWidget):
         """Handle 'Run Heating Sequence' button click."""
         main_window = self.window()
         from .automation_panel import AutomationPanel, LaserHeatingWorker
-        from .sequence_dialog import SequenceSummaryDialog
+        from .sequence_dialog import LaserHeatingSummaryDialog
         
         automation_panel = None
         if main_window:
@@ -688,7 +688,14 @@ class LiveView(QWidget):
             
         start_idx = automation_panel.start_step_spin.value()
         cooling_delay = automation_panel.get_cooling_delay()
-        dlg = SequenceSummaryDialog(steps, cooling_delay=cooling_delay, start_index=start_idx, parent=self)
+        meas_power_w = automation_panel.get_measurement_power()
+        dlg = LaserHeatingSummaryDialog(
+            steps,
+            cooling_delay=cooling_delay,
+            start_index=start_idx,
+            meas_power_w=meas_power_w,
+            parent=self
+        )
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
             
@@ -771,6 +778,12 @@ class LiveView(QWidget):
         powers = automation_panel.get_power_series_steps()
         if not powers:
             QMessageBox.warning(self, "Empty Sequence", "The power series is empty.")
+            return
+
+        from .sequence_dialog import PowerSeriesSummaryDialog
+        stab_delay = automation_panel.get_ps_stabilization_delay()
+        dlg = PowerSeriesSummaryDialog(powers, stabilization_delay=stab_delay, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
         # Prepare Execution
@@ -865,6 +878,12 @@ class LiveView(QWidget):
 
         if len(points) == 0:
             QMessageBox.warning(self, "Empty Map", "No valid coordinate points found.")
+            return
+
+        from .sequence_dialog import MappingSummaryDialog
+        stab_delay = automation_panel.map_stab_spin.value()
+        dlg = MappingSummaryDialog(points, stabilization_delay=stab_delay, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
         # Prepare Execution

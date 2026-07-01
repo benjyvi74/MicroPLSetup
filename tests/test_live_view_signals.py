@@ -7,7 +7,7 @@ import numpy as np
 sys.modules['pylablib'] = MagicMock()
 sys.modules['pylablib.devices'] = MagicMock()
 
-from PyQt6.QtWidgets import QApplication
+from micropl.qt import QApplication
 from micropl.gui.main import MainWindow
 from micropl.gui.live_view import LiveView
 from micropl.gui.measurement_panel import MeasurementPanel
@@ -129,6 +129,61 @@ class TestLiveViewSignals(unittest.TestCase):
                 
         # We expect 1 call: only heating step 1
         self.assertEqual(mock_ready2.call_count, 1)
+
+    @patch('micropl.gui.automation_panel.acquire_spectrum_synchronized')
+    def test_laser_heating_worker_background_update(self, mock_acquire):
+        bg_val = 42.0
+        meas_val = 100.0
+        # Alternating mock values: first 9 calls (step 1-9 meas) get meas_val, 
+        # 10th call (step 10 bg update) gets bg_val, 11th call (step 10 meas) gets meas_val
+        mock_spectra = [np.ones(1024) * meas_val] * 9 + [np.ones(1024) * bg_val] + [np.ones(1024) * meas_val]
+        mock_acquire.side_effect = mock_spectra
+        
+        # Setup mock hardware
+        mock_pol = MagicMock()
+        mock_pol.is_connected.return_value = True
+        mock_pol.is_moving.return_value = False
+        
+        mock_shutter = MagicMock()
+        
+        mock_cam = MagicMock()
+        mock_cam.is_connected.return_value = True
+        mock_cam.get_exposure.return_value = 0.1
+        mock_cam.get_info.return_value = {'detector_size': (1024, 256)}
+        
+        self.hw.instruments['polarizer'] = mock_pol
+        self.hw.instruments['shutter'] = mock_shutter
+        self.hw.config = {
+            'hardware': {
+                'shutter': {
+                    'linked_id': 'shutter',
+                    'channel': 1
+                }
+            }
+        }
+        self.hw.get_spectroscopy_camera = MagicMock(return_value=mock_cam)
+        self.hw.polarizer_calibration.points = {0.0: 10.0, 0.001: 20.0, 0.002: 30.0}
+        self.hw.polarizer_calibration.get_angle_for_power = MagicMock(return_value=15.0)
+        
+        from micropl.gui.automation_panel import LaserHeatingWorker
+        # 10 steps
+        steps = [{'target_w': 0.001, 'duration': 0.1} for _ in range(10)]
+        
+        worker = LaserHeatingWorker(
+            self.hw, meas_power_w=0.001, steps=steps, data_dir="/tmp/test_heating_bg",
+            metadata={}, skip_step_0=True, start_index=1
+        )
+        
+        self.assertIsNone(worker.background)
+        
+        with patch('os.makedirs'):
+            with patch('micropl.core.data_manager.DataManager.save_spectrum'):
+                worker._execute_sequence()
+                
+        # Total calls should be 11: 10 steps + 1 background update at step 10
+        self.assertEqual(mock_acquire.call_count, 11)
+        np.testing.assert_array_equal(worker.background, np.ones(1024) * bg_val)
+        self.assertEqual(worker.background_exposure, 100.0)
 
     @patch('micropl.gui.automation_panel.acquire_spectrum_synchronized')
     def test_power_series_worker_execution(self, mock_acquire):
@@ -481,6 +536,55 @@ class TestColormapScalingControls(unittest.TestCase):
             min_val=525.0,
             max_val=535.0
         )
+
+
+class TestReorderableTableWidget(unittest.TestCase):
+    def test_reorder_rows_with_widgets(self):
+        from micropl.gui.automation_panel import ReorderableTableWidget
+        from micropl.qt import QComboBox, QTableWidgetItem
+        
+        table = ReorderableTableWidget()
+        table.setColumnCount(3)
+        table.setRowCount(3)
+        
+        # Populate items and cell widgets
+        for r in range(3):
+            item = QTableWidgetItem(f"item_{r}")
+            table.setItem(r, 0, item)
+            
+            combo = QComboBox()
+            combo.addItem(f"widget_{r}")
+            table.setCellWidget(r, 1, combo)
+            
+            item2 = QTableWidgetItem(f"val_{r}")
+            table.setItem(r, 2, item2)
+            
+        # Connect order_changed signal
+        mock_slot = MagicMock()
+        table.order_changed.connect(mock_slot)
+        
+        # Move row 0 to the bottom (index 3)
+        table.move_rows([0], 3)
+        
+        # Verify order_changed signal was emitted
+        mock_slot.assert_called_once()
+        
+        # Expected new order: original row 1 (now row 0), original row 2 (now row 1), original row 0 (now row 2)
+        # Check column 0 text
+        self.assertEqual(table.item(0, 0).text(), "item_1")
+        self.assertEqual(table.item(1, 0).text(), "item_2")
+        self.assertEqual(table.item(2, 0).text(), "item_0")
+        
+        # Check column 1 widgets
+        self.assertEqual(table.cellWidget(0, 1).currentText(), "widget_1")
+        self.assertEqual(table.cellWidget(1, 1).currentText(), "widget_2")
+        self.assertEqual(table.cellWidget(2, 1).currentText(), "widget_0")
+        
+        # Check column 2 text
+        self.assertEqual(table.item(0, 2).text(), "val_1")
+        self.assertEqual(table.item(1, 2).text(), "val_2")
+        self.assertEqual(table.item(2, 2).text(), "val_0")
+
 
 if __name__ == '__main__':
     unittest.main()

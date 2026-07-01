@@ -46,6 +46,138 @@ class NumericTableWidgetItem(QTableWidgetItem):
             return super().__lt__(other)
 
 
+class ReorderableTableWidget(QTableWidget):
+    """
+    A QTableWidget subclass that supports drag-and-drop row reordering,
+    preserving custom cell widgets.
+    """
+    order_changed = pyqtSignal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        vp = self.viewport()
+        if vp is not None:
+            vp.setAcceptDrops(True)
+        self.setDragDropOverwriteMode(False)
+        self.setDragDropMode(QTableWidget.DragDropMode.InternalMove)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        vp = self.viewport()
+        if vp is not None:
+            vp.setAcceptDrops(True)
+
+    def dropEvent(self, event):
+        if event.source() != self:
+            event.ignore()
+            return
+            
+        selected_rows = sorted(list(set(index.row() for index in self.selectedIndexes())))
+        if not selected_rows:
+            event.ignore()
+            return
+            
+        pos = event.position()
+        target_row = self.rowAt(int(pos.y()))
+        
+        if target_row == -1:
+            target_row = self.rowCount()
+        else:
+            # If dropped on the bottom half of the row, insert after it
+            row_y = self.rowViewportPosition(target_row)
+            row_height = self.rowHeight(target_row)
+            if pos.y() > row_y + row_height / 2:
+                target_row += 1
+            
+        event.setDropAction(Qt.DropAction.IgnoreAction)
+        event.accept()
+        
+        # Defer move_rows to prevent crashes from modifying the table
+        # while the drag-and-drop operation is still active.
+        QTimer.singleShot(0, lambda: self.move_rows(selected_rows, target_row))
+
+    def move_rows(self, source_rows: List[int], target_row: int):
+        was_sorting = self.isSortingEnabled()
+        self.setSortingEnabled(False)
+        self.blockSignals(True)
+        
+        source_rows = sorted(list(set(source_rows)))
+        if not source_rows:
+            self.blockSignals(False)
+            self.setSortingEnabled(was_sorting)
+            return
+
+        # 1. Store the items and clone widgets of the rows to be moved
+        moved_data = []
+        for r in source_rows:
+            row_cols = []
+            for c in range(self.columnCount()):
+                item = self.item(r, c)
+                cloned_item = QTableWidgetItem(item) if item is not None else None
+                
+                widget = self.cellWidget(r, c)
+                cloned_widget = None
+                if widget is not None:
+                    if isinstance(widget, QComboBox):
+                        cloned_widget = QComboBox()
+                        for i in range(widget.count()):
+                            cloned_widget.addItem(widget.itemText(i), widget.itemData(i))
+                        cloned_widget.setCurrentIndex(widget.currentIndex())
+                        # Reconnect signal if it is custom_seq_table column 1
+                        if self == getattr(self.parent(), 'custom_seq_table', None) and c == 1:
+                            panel = self.parent()
+                            if hasattr(panel, '_on_custom_action_changed'):
+                                cloned_widget.currentIndexChanged.connect(panel._on_custom_action_changed)
+                    elif isinstance(widget, QDoubleSpinBox):
+                        cloned_widget = QDoubleSpinBox()
+                        cloned_widget.setRange(widget.minimum(), widget.maximum())
+                        cloned_widget.setValue(widget.value())
+                        cloned_widget.setSuffix(widget.suffix())
+                        cloned_widget.setDecimals(widget.decimals())
+                        cloned_widget.setSingleStep(widget.singleStep())
+                    elif isinstance(widget, QSpinBox):
+                        cloned_widget = QSpinBox()
+                        cloned_widget.setRange(widget.minimum(), widget.maximum())
+                        cloned_widget.setValue(widget.value())
+                        cloned_widget.setSuffix(widget.suffix())
+                        cloned_widget.setSingleStep(widget.singleStep())
+                    elif isinstance(widget, QLabel):
+                        cloned_widget = QLabel(widget.text())
+                        cloned_widget.setStyleSheet(widget.styleSheet())
+                        
+                row_cols.append((cloned_item, cloned_widget))
+            moved_data.append(row_cols)
+
+        # 2. Remove the source rows from the table in reverse order
+        for r in reversed(source_rows):
+            self.removeRow(r)
+
+        # 3. Calculate the new target row index in the updated table
+        num_removed_before_target = sum(1 for r in source_rows if r < target_row)
+        new_target = target_row - num_removed_before_target
+        new_target = max(0, min(new_target, self.rowCount()))
+
+        # 4. Insert new rows at the new target and restore items/widgets
+        for i, row_cols in enumerate(moved_data):
+            insert_idx = new_target + i
+            self.insertRow(insert_idx)
+            for c, (item, widget) in enumerate(row_cols):
+                if item is not None:
+                    self.setItem(insert_idx, c, item)
+                if widget is not None:
+                    self.setCellWidget(insert_idx, c, widget)
+
+        self.blockSignals(False)
+        self.order_changed.emit()
+        self.setSortingEnabled(was_sorting)
+
+
+
 def acquire_spectrum_synchronized(cam, hw) -> np.ndarray:
 
     """
@@ -517,6 +649,22 @@ class LaserHeatingWorker(QThread):
             percent = int((current_phase / total_phases) * 100)
             # set_power will emit its own "Moving for Measure X..." status
             if not set_power(self.meas_power_w, f"Measure {step_idx}", step_idx): break
+            
+            # Every 10 steps, capture a new background with shutter closed
+            if step_idx > 0 and step_idx % 10 == 0:
+                self.progress.emit(step_idx, f"Updating Background (Step {step_idx})", percent)
+                if shutter and shutter.is_connected():
+                    shutter.set_shutter(False, channel=self.hw.shutter_channel)
+                    time.sleep(0.5) # Wait for shutter to close / stabilize
+                
+                exposure_time = cam.get_exposure()
+                bg_data = acquire_spectrum_synchronized(cam, self.hw)
+                if bg_data.ndim == 2:
+                    bg_data = np.sum(bg_data, axis=0)
+                
+                self.background = bg_data
+                self.background_exposure = exposure_time * 1000.0 # in ms
+                logger.info(f"Background dynamically updated at step {step_idx} with exposure {exposure_time}s")
             
             # Open shutter for Live View observation during cooling
             if shutter: shutter.set_shutter(True, channel=self.hw.shutter_channel)
@@ -1637,9 +1785,10 @@ class AutomationPanel(QWidget):
         layout.addWidget(bulk_group)
 
         # --- Table ---
-        self.heating_table = QTableWidget()
+        self.heating_table = ReorderableTableWidget()
         self.heating_table.setColumnCount(3)
         self.heating_table.setHorizontalHeaderLabels(["Step #", "Heat Power", "Duration (s)"])
+        self.heating_table.order_changed.connect(self._reindex_heating_steps)
         heating_header = self.heating_table.horizontalHeader()
         if heating_header is not None:
             heating_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -1744,9 +1893,10 @@ class AutomationPanel(QWidget):
         layout.addWidget(gen_group)
 
         # --- Table ---
-        self.power_table = QTableWidget()
+        self.power_table = ReorderableTableWidget()
         self.power_table.setColumnCount(2)
         self.power_table.setHorizontalHeaderLabels(["Step #", "Power"])
+        self.power_table.order_changed.connect(self._reindex_power_steps)
         power_header = self.power_table.horizontalHeader()
         if power_header is not None:
             power_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -2813,18 +2963,6 @@ class AutomationPanel(QWidget):
         
         toolbar.addSpacing(10)
         
-        up_btn = QPushButton("Move Up")
-        up_btn.setFixedWidth(90)
-        up_btn.clicked.connect(self._on_move_up_custom_step)
-        toolbar.addWidget(up_btn)
-        
-        down_btn = QPushButton("Move Down")
-        down_btn.setFixedWidth(90)
-        down_btn.clicked.connect(self._on_move_down_custom_step)
-        toolbar.addWidget(down_btn)
-        
-        toolbar.addSpacing(10)
-        
         import_btn = QPushButton("Import JSON")
         import_btn.setFixedWidth(100)
         import_btn.clicked.connect(self._on_import_custom_sequence)
@@ -2839,9 +2977,10 @@ class AutomationPanel(QWidget):
         layout.addLayout(toolbar)
 
         # Table
-        self.custom_seq_table = QTableWidget()
+        self.custom_seq_table = ReorderableTableWidget()
         self.custom_seq_table.setColumnCount(4)
         self.custom_seq_table.setHorizontalHeaderLabels(["Step #", "Action", "Parameters", "Label/Comment"])
+        self.custom_seq_table.order_changed.connect(self._reindex_custom_steps)
         self.custom_seq_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.custom_seq_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         header = self.custom_seq_table.horizontalHeader()
@@ -2985,26 +3124,7 @@ class AutomationPanel(QWidget):
     def _on_clear_custom_steps(self):
         self.custom_seq_table.setRowCount(0)
 
-    def _on_move_up_custom_step(self):
-        row = self.custom_seq_table.currentRow()
-        if row <= 0:
-            return
-        self._swap_custom_rows(row, row - 1)
-        self.custom_seq_table.setCurrentCell(row - 1, 1)
 
-    def _on_move_down_custom_step(self):
-        row = self.custom_seq_table.currentRow()
-        if row < 0 or row >= self.custom_seq_table.rowCount() - 1:
-            return
-        self._swap_custom_rows(row, row + 1)
-        self.custom_seq_table.setCurrentCell(row + 1, 1)
-
-    def _swap_custom_rows(self, r1: int, r2: int):
-        data1 = self._serialize_custom_row(r1)
-        data2 = self._serialize_custom_row(r2)
-        self._deserialize_custom_row(r1, data2)
-        self._deserialize_custom_row(r2, data1)
-        self._reindex_custom_steps()
 
     def _serialize_custom_row(self, row: int) -> Dict[str, Any]:
         act_combo = self.custom_seq_table.cellWidget(row, 1)

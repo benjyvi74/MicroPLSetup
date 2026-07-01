@@ -34,6 +34,110 @@ def _format_com_error(exc: Exception) -> str:
     return str(exc)
 
 
+def _check_64bit_surrogate_registration() -> Tuple[bool, str]:
+    """
+    Check if the 32-bit Jobin Yvon COM DLLs are registered with DllSurrogate
+    for 64-bit process access on Windows.
+    
+    Returns:
+        Tuple of (is_configured, diagnostic_message)
+    """
+    import sys
+    if sys.platform != 'win32':
+        return True, ""
+        
+    is_64bit = sys.maxsize > 2**32
+    if not is_64bit:
+        return True, ""  # 32-bit Python processes don't need surrogate registry entries
+        
+    try:
+        import winreg  # type: ignore
+    except ImportError:
+        return True, "winreg is not available on this platform."
+        
+    components = {
+        "JYConfigBrowerInterface (Config Browser)": "{3A457ACC-F1FB-4D7D-9AB4-EE427CE33385}",
+        "Monochromator (JYMono)": "{BFF968D4-7B20-4D16-BD3A-BDEFEB0863A4}"
+    }
+    
+    missing_surrogates = []
+    
+    for name, clsid in components.items():
+        # Check AppID registration and DllSurrogate under Wow6432Node
+        key_path = f"Wow6432Node\\AppID\\{clsid}"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, key_path) as key:  # type: ignore
+                val, val_type = winreg.QueryValueEx(key, "DllSurrogate")  # type: ignore
+                # DllSurrogate is expected to exist (usually empty string or system path)
+        except FileNotFoundError:
+            missing_surrogates.append(name)
+            
+    if missing_surrogates:
+        msg = (
+            f"WARNING: Running in a 64-bit Python environment, but the following Horiba COM DLLs are "
+            f"not registered with a DLL surrogate in the registry: {', '.join(missing_surrogates)}.\n"
+            f"COM instantiation will fail with 'Class not registered'.\n"
+            f"To resolve this, please locate the '64bit environment' folder in the 'JYSDK 3.8.1' desktop "
+            f"directory, right-click 'JYConfigBrower_JYMono_JYMCD_64bit.reg', and select 'Merge'."
+        )
+        return False, msg
+        
+    return True, "64-bit COM DLL surrogates are properly registered."
+
+
+def _diagnose_com_error(exc: Exception) -> str:
+    """Analyze COM errors and return helpful, actionable setup / 64-bit environment diagnostics."""
+    base_msg = _format_com_error(exc)
+    
+    if not _COM_AVAILABLE:
+        return base_msg
+        
+    import sys
+    is_64bit = sys.maxsize > 2**32
+    
+    if isinstance(exc, pywintypes.com_error):
+        try:
+            hresult = exc.args[0]
+            if not isinstance(hresult, int):
+                hresult = int(hresult)
+                
+            # Class not registered (0x80040154)
+            if hresult == -2147221164 or hresult == 0x80040154:
+                msg = (
+                    f"COM Error: Class not registered (HRESULT: 0x80040154).\n"
+                    f"*** Actionable Diagnostics ***\n"
+                    f"1. Make sure you have installed the Jobin Yvon SDK.\n"
+                    f"2. Ensure you have registered the SDK components by running 'RegHJY.bat' and "
+                    f"'RegHJY_SDK.bat' as Administrator from the SDK folder.\n"
+                )
+                if is_64bit:
+                    msg += (
+                        f"3. DETECTED 64-BIT PYTHON ENVIRONMENT: Since the Horiba SDK DLLs are 32-bit, "
+                        f"they cannot be loaded directly in 64-bit Python. You MUST configure a DLL surrogate by:\n"
+                        f"   - Locating the '64bit environment' folder in the 'JYSDK 3.8.1' desktop directory.\n"
+                        f"   - Merging 'JYConfigBrower_JYMono_JYMCD_64bit.reg' into the Windows Registry.\n"
+                        f"   - This registers DllSurrogate ('dllhost.exe') to act as a 32-to-64-bit bridge."
+                    )
+                else:
+                    msg += "3. Verify that the SDK installation folder exists and contains 'JYMono.dll'."
+                return msg
+                
+            # Access Denied (0x80070005)
+            elif hresult == -2147024891 or hresult == 0x80070005:
+                return (
+                    f"COM Error: Access Denied (HRESULT: 0x80070005).\n"
+                    f"*** Actionable Diagnostics ***\n"
+                    f"1. Run Python or your application as Administrator.\n"
+                    f"2. Check Windows DEP (Data Execution Prevention) settings. If needed, configure an exception or "
+                    f"disable DEP (e.g. via 'bcdedit.exe /set {{current}} nx AlwaysOff' from an elevated command prompt).\n"
+                    f"3. See 'SDK_LabVIEW_Windows7SecurityIssues.pdf' in the '64bit environment' folder for more details."
+                )
+        except Exception:
+            pass
+            
+    return base_msg
+
+
 from .base import Spectrometer
 
 logger = logging.getLogger(__name__)
@@ -147,6 +251,11 @@ class HoribaSDKMonochromator(Spectrometer):
         if not _COM_AVAILABLE:
             raise RuntimeError("pywin32 is not installed. Run: pip install pywin32")
 
+        # Check registry compatibility on 64-bit Windows
+        ok, reg_msg = _check_64bit_surrogate_registration()
+        if not ok:
+            logger.warning(reg_msg)
+
         results = []
         try:
             pythoncom.CoInitialize()
@@ -157,10 +266,14 @@ class HoribaSDKMonochromator(Spectrometer):
                 results.append((str(name), str(mono_id)))
                 name, mono_id = browser.GetNextMono()
         except Exception as exc:
-            raise RuntimeError(
-                f"SDK discovery failed. Are RegHJY.bat / RegHJY_SDK.bat registered? "
-                f"Details: {_format_com_error(exc)}"
-            ) from exc
+            diag_details = _diagnose_com_error(exc)
+            err_msg = (
+                f"SDK discovery failed. Are RegHJY.bat / RegHJY_SDK.bat registered?\n"
+                f"Details: {diag_details}"
+            )
+            if not ok:
+                err_msg += f"\nRegistry Check:\n{reg_msg}"
+            raise RuntimeError(err_msg) from exc
 
         logger.info(f"iHR320: Discovered {len(results)} monochromator(s): {results}")
         return results
@@ -185,6 +298,11 @@ class HoribaSDKMonochromator(Spectrometer):
                 "The Jobin Yvon SDK also requires RegHJY.bat and RegHJY_SDK.bat "
                 "to be run as Administrator on Windows."
             )
+
+        # Check registry compatibility on 64-bit Windows
+        ok, reg_msg = _check_64bit_surrogate_registration()
+        if not ok:
+            logger.warning(reg_msg)
 
         with self._lock:
             pythoncom.CoInitialize()
@@ -222,10 +340,14 @@ class HoribaSDKMonochromator(Spectrometer):
                     self._mono = win32com.client.Dispatch(_MONO_PROGID)
                     self._use_events = False
                 except Exception as inner_exc:
-                    raise RuntimeError(
+                    diag_details = _diagnose_com_error(inner_exc)
+                    err_msg = (
                         f"iHR320: Failed to instantiate COM object '{_MONO_PROGID}'. "
-                        f"Is the SDK properly registered? Details: {_format_com_error(inner_exc)}"
-                    ) from inner_exc
+                        f"Is the SDK properly registered? Details: {diag_details}"
+                    )
+                    if not ok:
+                        err_msg += f"\nRegistry Check:\n{reg_msg}"
+                    raise RuntimeError(err_msg) from inner_exc
 
             # Bind device config and open USB
             try:
@@ -233,9 +355,10 @@ class HoribaSDKMonochromator(Spectrometer):
                 self._mono.Load()
             except Exception as exc:
                 self._mono = None
+                diag_details = _diagnose_com_error(exc)
                 raise RuntimeError(
                     f"iHR320: Failed to load configuration for unique_id '{self._unique_id}'. "
-                    f"Did you run JYUSBSpectrometerConfig.exe? Details: {_format_com_error(exc)}"
+                    f"Did you run JYUSBSpectrometerConfig.exe? Details: {diag_details}"
                 ) from exc
 
             logger.info("iHR320: Opening USB communications...")
@@ -243,9 +366,18 @@ class HoribaSDKMonochromator(Spectrometer):
                 self._mono.OpenCommunications()
             except Exception as exc:
                 self._mono = None
+                com_err_str = _format_com_error(exc)
                 raise RuntimeError(
-                    f"iHR320: Failed to open USB communications. "
-                    f"Is the device connected via USB and powered on? Details: {_format_com_error(exc)}"
+                    f"iHR320: Failed to open USB communications.\n"
+                    f"*** Actionable Diagnostics ***\n"
+                    f"1. Verify that the device is turned on, powered, and connected via USB.\n"
+                    f"2. WINDOWS MEMORY INTEGRITY COMPATIBILITY ISSUE: Windows 10/11 patches may run memory integrity "
+                    f"in the background which blocks the default CyUSB3.sys driver.\n"
+                    f"   To fix this issue:\n"
+                    f"   - Install 'HSDriver.exe' (ver 5.0.1) from the 'SDK 4.0.1.11_HotFix' folder on the desktop.\n"
+                    f"   - Copy 'JYHardware.dll' and 'CommunicationsCom.dll' to your common files folder: "
+                    f"'C:\\Program Files (x86)\\Jobin Yvon\\Common\\JY Components\\JYSupport'.\n"
+                    f"Details: {com_err_str}"
                 ) from exc
 
             # Initialize (homes all motors asynchronously)
@@ -452,13 +584,21 @@ class HoribaSDKMonochromator(Spectrometer):
         if not self.is_connected() or self._mono is None:
             return self._grating_idx
         with self._lock:
-            current_density, all_densities = self._mono.GetCurrentGrating()
-        try:
-            idx = list(all_densities).index(current_density)
-        except ValueError:
-            idx = self._grating_idx
-        self._grating_idx = idx
-        return idx
+            try:
+                # Direct API check for the current turret index
+                idx = int(self._mono.GetCurrentTurret())
+                self._grating_idx = idx
+                return idx
+            except Exception as e:
+                logger.debug(f"GetCurrentTurret failed: {e}. Falling back to GetCurrentGrating.")
+                try:
+                    current_density, all_densities = self._mono.GetCurrentGrating()
+                    idx = list(all_densities).index(current_density)
+                    self._grating_idx = idx
+                    return idx
+                except Exception as inner_e:
+                    logger.warning(f"Failed to read grating from hardware: {inner_e}")
+                    return self._grating_idx
 
     # -----------------------------------------------------------------------
     # Slits

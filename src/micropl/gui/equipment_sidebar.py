@@ -9,8 +9,9 @@ from ..qt import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame, 
     Qt, QPushButton, QLabel, QApplication, QToolButton
 )
-from PyQt6.QtGui import QDrag, QPainter, QColor
-from PyQt6.QtCore import QMimeData, QEvent
+from ..qt import QtGui, QtCore
+QDrag, QPainter, QColor = QtGui.QDrag, QtGui.QPainter, QtGui.QColor
+QMimeData, QEvent = QtCore.QMimeData, QtCore.QEvent
 from .reorderable_container import ReorderableVBoxContainer
 from ..hardware.manager import HardwareManager
 
