@@ -6,8 +6,8 @@ from micropl.hardware.horiba_sdk import HoribaSDKMonochromator
 # Set logging level for the horiba_sdk module to see the internal logs
 logging.basicConfig(level=logging.INFO)
 
-def test_horiba_sdk():
-    print("\n=== Horiba iHR320 SDK Diagnostic Tool ===")
+def test_horiba_sdk(target_id: str = "Mono2"):
+    print(f"\n=== Horiba iHR320 SDK Diagnostic Tool (Targeting '{target_id}') ===")
     
     # 1. Discover devices
     try:
@@ -16,19 +16,19 @@ def test_horiba_sdk():
         if not devices:
             print("   WARNING: No monochromators found. Check SDK registration and USB connection.")
             return
-        for name, unique_id in devices:
-            print(f"   - Found '{name}' with ID: '{unique_id}'")
+        for unique_id, model_name in devices:
+            print(f"   - Found unique_id '{unique_id}' (Model: '{model_name}')")
     except Exception as e:
         print(f"   ERROR during discovery: {e}")
         print(f"   Traceback:\n{traceback.format_exc()}")
         return
 
     # 2. Connect
-    print("\n2. Connecting to the first available device...")
+    print(f"\n2. Connecting to device with unique_id='{target_id}'...")
     try:
-        # Use default config (auto-discovers first device)
+        # Pass explicit unique_id (default Mono2)
         # Note: force_init=False is recommended to speed up the test if already homed.
-        mono = HoribaSDKMonochromator(config={"force_init": False})
+        mono = HoribaSDKMonochromator(config={"unique_id": target_id, "force_init": False})
         mono.connect()
         print("   SUCCESS! Connected.")
     except Exception as e:
@@ -101,4 +101,6 @@ def test_horiba_sdk():
         print(f"   Traceback:\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
-    test_horiba_sdk()
+    import sys
+    target_id = sys.argv[1] if len(sys.argv) > 1 else "Mono2"
+    test_horiba_sdk(target_id)

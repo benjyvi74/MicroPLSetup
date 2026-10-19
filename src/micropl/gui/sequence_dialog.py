@@ -4,17 +4,19 @@ from typing import Any, Dict, List, Tuple
 from ..qt import (
     QCheckBox,
     QDialog,
+    QGridLayout,
     QHeaderView,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     Qt,
 )
 
-from .automation_panel import format_power_w
+from .automation_panel import format_power_w, unroll_custom_sequence
 
 logger = logging.getLogger(__name__)
 
@@ -698,7 +700,8 @@ class CustomSequenceSummaryDialog(QDialog):
             return v_stage_c / a_stage + dist / v_stage_c if dist > theta_c else 2 * (dist / a_stage)**0.5
 
         total_s = 0.0
-        for step in self.steps:
+        unrolled_steps = unroll_custom_sequence(self.steps)
+        for step in unrolled_steps:
             action = step.get('action', '')
             params = step.get('params', {})
             
@@ -746,4 +749,106 @@ class CustomSequenceSummaryDialog(QDialog):
             time_str = f"{mins}m {secs}s"
         else:
             time_str = f"{secs}s"
-        self.est_time_lbl.setText(f"Estimated Total Duration: {time_str}")
+            
+        unrolled_steps = unroll_custom_sequence(self.steps)
+        if len(unrolled_steps) != len(self.steps):
+            self.est_time_lbl.setText(f"Estimated Total Duration: {time_str} ({len(unrolled_steps)} execution steps)")
+        else:
+            self.est_time_lbl.setText(f"Estimated Total Duration: {time_str}")
+
+
+class RepeatCustomStepsDialog(QDialog):
+    """
+    Dialog to configure repeating a range of steps in the custom sequence editor.
+    Allows either inserting a 'Repeat / Loop' step or duplicating
+    steps directly in the table.
+    """
+    def __init__(self, num_steps: int, sel_from: int = 1, sel_to: int = 1, parent=None):
+        super().__init__(parent)
+        self.num_steps = max(1, num_steps)
+        self.setWindowTitle("Repeat Steps / Loop")
+        self.resize(440, 260)
+        self.selected_action = "loop_step"  # "loop_step" or "duplicate"
+        self._init_ui(sel_from, sel_to)
+
+    def _init_ui(self, sel_from: int, sel_to: int):
+        layout = QVBoxLayout(self)
+
+        info_lbl = QLabel("<b>Configure Step Repetition / Loop:</b>")
+        layout.addWidget(info_lbl)
+
+        # Form
+        grid = QGridLayout()
+        grid.setSpacing(10)
+
+        grid.addWidget(QLabel("From Step #:"), 0, 0)
+        self.from_spin = QSpinBox()
+        self.from_spin.setRange(1, self.num_steps)
+        self.from_spin.setValue(max(1, min(sel_from, self.num_steps)))
+        grid.addWidget(self.from_spin, 0, 1)
+
+        grid.addWidget(QLabel("To Step #:"), 1, 0)
+        self.to_spin = QSpinBox()
+        self.to_spin.setRange(1, self.num_steps)
+        self.to_spin.setValue(max(1, min(sel_to, self.num_steps)))
+        grid.addWidget(self.to_spin, 1, 1)
+
+        grid.addWidget(QLabel("Total Executions (Count):"), 2, 0)
+        self.count_spin = QSpinBox()
+        self.count_spin.setRange(1, 9999)
+        self.count_spin.setValue(2)
+        self.count_spin.setSuffix(" times")
+        grid.addWidget(self.count_spin, 2, 1)
+
+        layout.addLayout(grid)
+
+        # Description note
+        self.note_lbl = QLabel()
+        self.note_lbl.setStyleSheet("color: #2980b9; font-style: italic;")
+        layout.addWidget(self.note_lbl)
+
+        self.from_spin.valueChanged.connect(self._update_note)
+        self.to_spin.valueChanged.connect(self._update_note)
+        self.count_spin.valueChanged.connect(self._update_note)
+        self._update_note()
+
+        # Action Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        duplicate_btn = QPushButton("Duplicate Rows in Table")
+        duplicate_btn.setToolTip("Unroll and copy the selected steps directly into the table")
+        duplicate_btn.clicked.connect(self._on_duplicate_clicked)
+        btn_layout.addWidget(duplicate_btn)
+
+        loop_btn = QPushButton("Insert Loop Step")
+        loop_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
+        loop_btn.setToolTip("Insert a 'Repeat / Loop' step right after the selected block")
+        loop_btn.clicked.connect(self._on_loop_clicked)
+        btn_layout.addWidget(loop_btn)
+
+        layout.addLayout(btn_layout)
+
+    def _update_note(self):
+        f = min(self.from_spin.value(), self.to_spin.value())
+        t = max(self.from_spin.value(), self.to_spin.value())
+        cnt = self.count_spin.value()
+        self.note_lbl.setText(f"Steps {f} to {t} will execute a total of {cnt} times.")
+
+    def _on_loop_clicked(self):
+        self.selected_action = "loop_step"
+        self.accept()
+
+    def _on_duplicate_clicked(self):
+        self.selected_action = "duplicate"
+        self.accept()
+
+    def get_values(self) -> Tuple[int, int, int, str]:
+        f = min(self.from_spin.value(), self.to_spin.value())
+        t = max(self.from_spin.value(), self.to_spin.value())
+        cnt = self.count_spin.value()
+        return f, t, cnt, self.selected_action

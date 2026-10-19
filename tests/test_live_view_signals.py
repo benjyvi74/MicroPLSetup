@@ -60,6 +60,20 @@ class TestLiveViewSignals(unittest.TestCase):
         self.assertEqual(self.measurement_panel.history_list.count(), 1)
         self.assertEqual(len(self.measurement_panel._history_data), 1)
 
+    def test_spectral_axis_mev_conversion(self):
+        self.live_view._active_camera_id = 'cam_spec'
+        with patch.object(self.hw, 'get_camera_config', return_value={'role': 'spectroscopy'}), \
+             patch.object(self.hw, 'get_wavelength_axis', return_value=np.array([885.0])):
+            self.live_view.spec_unit_combo.setCurrentText("Spectral Units")
+            self.hw.spectral_unit = "meV"
+            self.live_view._spectral_x_cache = None
+            self.live_view._spectral_x_cache_key = None
+            
+            x = self.live_view._get_spectral_x(1)
+            # 1239841.93 / 885.0 ≈ 1400.95 meV (NOT ~1.4 eV)
+            self.assertGreater(x[0], 1000.0)
+            self.assertAlmostEqual(x[0], 1400.95, delta=1.0)
+
     @patch('micropl.gui.automation_panel.acquire_spectrum_synchronized')
     def test_laser_heating_worker_execution(self, mock_acquire):
         mock_acquire.return_value = np.ones(1024)
@@ -588,3 +602,4 @@ class TestReorderableTableWidget(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

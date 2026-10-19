@@ -12,7 +12,7 @@ from ..qt import (
     QTableWidget, QTableWidgetItem, Qt, QComboBox,
     QHeaderView, QThread, pyqtSignal, QFileDialog,
     QMessageBox, QTabWidget, QCheckBox, QSplitter, QSizePolicy,
-    QtGui, QtCore, QFrame, QTimer
+    QtGui, QtCore, QFrame, QTimer, QDialog, QGridLayout, QLineEdit
 )
 
 from ..hardware.manager import HardwareManager
@@ -35,6 +35,150 @@ def format_power_w(p_w: float) -> str:
         return f"{p_w*1e3:.2f} mW"
     else:
         return f"{p_w:.3f} W"
+
+
+class LoopParamWidget(QWidget):
+    """
+    Compact widget to configure loop parameters in the sequence table:
+    From step N to step M, repeating X times (total executions).
+    """
+    valueChanged = pyqtSignal()
+
+    def __init__(self, from_step: int = 1, to_step: int = 1, count: int = 2, max_steps: int = 999, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 1, 4, 1)
+        layout.setSpacing(4)
+
+        layout.addWidget(QLabel("From:"))
+        self.from_spin = QSpinBox()
+        self.from_spin.setRange(1, max(1, max_steps))
+        self.from_spin.setValue(max(1, from_step))
+        self.from_spin.setToolTip("Starting step number of the loop")
+        layout.addWidget(self.from_spin)
+
+        layout.addWidget(QLabel("To:"))
+        self.to_spin = QSpinBox()
+        self.to_spin.setRange(1, max(1, max_steps))
+        self.to_spin.setValue(max(1, to_step))
+        self.to_spin.setToolTip("Ending step number of the loop")
+        layout.addWidget(self.to_spin)
+
+        layout.addWidget(QLabel("Count:"))
+        self.count_spin = QSpinBox()
+        self.count_spin.setRange(1, 9999)
+        self.count_spin.setValue(max(1, count))
+        self.count_spin.setSuffix("x")
+        self.count_spin.setToolTip("Total number of times these steps will be executed")
+        layout.addWidget(self.count_spin)
+
+        self.from_spin.valueChanged.connect(self._on_change)
+        self.to_spin.valueChanged.connect(self._on_change)
+        self.count_spin.valueChanged.connect(self._on_change)
+
+    def _on_change(self):
+        self.valueChanged.emit()
+
+    def get_values(self) -> Tuple[int, int, int]:
+        return self.from_spin.value(), self.to_spin.value(), self.count_spin.value()
+
+    def set_values(self, from_step: int, to_step: int, count: int):
+        self.from_spin.blockSignals(True)
+        self.to_spin.blockSignals(True)
+        self.count_spin.blockSignals(True)
+        self.from_spin.setValue(max(1, from_step))
+        self.to_spin.setValue(max(1, to_step))
+        self.count_spin.setValue(max(1, count))
+        self.from_spin.blockSignals(False)
+        self.to_spin.blockSignals(False)
+        self.count_spin.blockSignals(False)
+
+    def set_max_steps(self, max_steps: int):
+        m = max(1, max_steps)
+        self.from_spin.setMaximum(m)
+        self.to_spin.setMaximum(m)
+
+
+def unroll_custom_sequence(steps: List[Dict[str, Any]], max_total_steps: int = 10000) -> List[Dict[str, Any]]:
+    """
+    Unroll / expand a custom sequence containing 'Repeat / Loop' steps into a
+    flat list of executable steps.
+    
+    Each step in the unrolled list contains:
+      - 'action': action string
+      - 'params': action parameters dict
+      - 'params_desc': formatted description
+      - 'comment': label/comment
+      - 'orig_step_num': 1-based original index from the table
+      - 'loop_iteration': 1-based loop iteration number for this step
+      - 'total_iterations': total executions configured for the loop (1 if not in a loop)
+    """
+    import copy
+    if not steps:
+        return []
+
+    # Map step_num (1-based) to its total iterations across all loops that include it
+    step_total_iters: Dict[int, int] = {i + 1: 1 for i in range(len(steps))}
+    for idx, s in enumerate(steps):
+        if s.get('action') == "Repeat / Loop":
+            params = s.get('params', {})
+            cnt = max(1, int(params.get('count', 1)))
+            f_s = min(int(params.get('from_step', 1)), int(params.get('to_step', 1)))
+            t_s = max(int(params.get('from_step', 1)), int(params.get('to_step', 1)))
+            f_s = max(1, min(f_s, len(steps)))
+            t_s = max(f_s, min(t_s, idx + 1))
+            for st in range(f_s, t_s + 1):
+                step_total_iters[st] = max(step_total_iters.get(st, 1), cnt)
+
+    unrolled: List[Dict[str, Any]] = []
+    current_iter: Dict[int, int] = {i + 1: 1 for i in range(len(steps))}
+    loop_triggered: Dict[int, int] = {i + 1: 0 for i in range(len(steps))}
+
+    pc = 0
+    total_executed = 0
+
+    while pc < len(steps) and total_executed < max_total_steps:
+        s = steps[pc]
+        step_num = pc + 1
+        action = s.get('action', '')
+
+        if action == "Repeat / Loop":
+            params = s.get('params', {})
+            target_count = max(1, int(params.get('count', 1)))
+            f_s = min(int(params.get('from_step', 1)), int(params.get('to_step', 1)))
+            t_s = max(int(params.get('from_step', 1)), int(params.get('to_step', 1)))
+            f_s = max(1, min(f_s, len(steps)))
+            t_s = max(f_s, min(t_s, step_num))
+
+            # Initial pass was 1. Additional passes triggered by this loop = loop_triggered[step_num].
+            if loop_triggered[step_num] < (target_count - 1):
+                loop_triggered[step_num] += 1
+                # Reset inner loop triggers if any inside [f_s, t_s]
+                for inner_idx in range(f_s, t_s + 1):
+                    if steps[inner_idx - 1].get('action') == "Repeat / Loop" and inner_idx != step_num:
+                        loop_triggered[inner_idx] = 0
+                # Jump back to start of loop block
+                pc = f_s - 1
+                continue
+            else:
+                # Loop completed, proceed forward
+                pc += 1
+                continue
+        else:
+            iter_num = current_iter[step_num]
+            total_iters = step_total_iters.get(step_num, 1)
+            
+            step_copy = copy.deepcopy(s)
+            step_copy['orig_step_num'] = step_num
+            step_copy['loop_iteration'] = iter_num
+            step_copy['total_iterations'] = total_iters
+
+            unrolled.append(step_copy)
+            current_iter[step_num] += 1
+            total_executed += 1
+            pc += 1
+
+    return unrolled
 
 
 class NumericTableWidgetItem(QTableWidgetItem):
@@ -149,6 +293,12 @@ class ReorderableTableWidget(QTableWidget):
                     elif isinstance(widget, QLabel):
                         cloned_widget = QLabel(widget.text())
                         cloned_widget.setStyleSheet(widget.styleSheet())
+                    elif isinstance(widget, QLineEdit):
+                        cloned_widget = QLineEdit(widget.text())
+                        cloned_widget.setPlaceholderText(widget.placeholderText())
+                    elif isinstance(widget, LoopParamWidget):
+                        from_s, to_s, cnt = widget.get_values()
+                        cloned_widget = LoopParamWidget(from_s, to_s, cnt, max_steps=widget.to_spin.maximum())
                         
                 row_cols.append((cloned_item, cloned_widget))
             moved_data.append(row_cols)
@@ -1036,7 +1186,8 @@ class CustomSequenceWorker(QThread):
                  processing_mode: str = "Raw Data"):
         super().__init__()
         self.hw = hardware_manager
-        self.steps = steps
+        self.raw_steps = steps
+        self.steps = unroll_custom_sequence(steps)
         self.data_dir = data_dir
         self.metadata = metadata
         self.background = background
@@ -1087,9 +1238,23 @@ class CustomSequenceWorker(QThread):
             action = step['action']
             params = step['params']
             comment = step['comment']
+            orig_step_num = step.get('orig_step_num', step_num)
+            iter_num = step.get('loop_iteration', 1)
+            total_iters = step.get('total_iterations', 1)
 
-            self.progress.emit(step_num, f"Step {step_num}: {action} ({step['params_desc']})", percent)
-            logger.info(f"Custom Sequence: Executing Step {step_num} - {action} - {step['params_desc']}")
+            p_desc = step.get('params_desc', '').strip()
+            if p_desc and p_desc.lower() not in ("capture spectrum", "collect spectrum", "capture"):
+                param_suffix = f" ({p_desc})"
+            else:
+                param_suffix = ""
+
+            if total_iters > 1:
+                status_desc = f"Step {orig_step_num} (Pass {iter_num}/{total_iters}): {action}{param_suffix}"
+            else:
+                status_desc = f"Step {orig_step_num}: {action}{param_suffix}"
+
+            self.progress.emit(step_num, status_desc, percent)
+            logger.info(f"Custom Sequence: Executing {status_desc}")
 
             if action == "Wait / Stabilize":
                 dur = params.get('duration', 0.0)
@@ -1196,7 +1361,18 @@ class CustomSequenceWorker(QThread):
                 processed_data = result.intensities
 
                 # Save
-                step_name = f"step_{step_num:03d}"
+                custom_prefix = params.get('prefix', '').strip()
+                if custom_prefix:
+                    clean_prefix = "".join(c for c in custom_prefix if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+                else:
+                    clean_prefix = ""
+
+                base_prefix = clean_prefix if clean_prefix else f"step_{orig_step_num:03d}"
+
+                if total_iters > 1:
+                    step_name = f"{base_prefix}_iter{iter_num:02d}"
+                else:
+                    step_name = base_prefix
                 if comment:
                     # Clean comment for filename
                     clean_comment = "".join(c for c in comment if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
@@ -1206,6 +1382,12 @@ class CustomSequenceWorker(QThread):
                 dm = DataManager(data_root=self.data_dir)
                 fname = f"{step_name}.csv"
                 save_path = os.path.join(self.data_dir, fname)
+                collision_idx = 1
+                while os.path.exists(save_path):
+                    fname = f"{step_name}_{collision_idx}.csv"
+                    save_path = os.path.join(self.data_dir, fname)
+                    collision_idx += 1
+
                 dm.save_spectrum(result, save_path)
 
                 # Emit for plotting
@@ -2961,6 +3143,13 @@ class AutomationPanel(QWidget):
         clear_btn.clicked.connect(self._on_clear_custom_steps)
         toolbar.addWidget(clear_btn)
         
+        toolbar.addSpacing(5)
+
+        repeat_btn = QPushButton("Repeat / Loop...")
+        repeat_btn.setToolTip("Repeat a range of steps in a loop or duplicate them")
+        repeat_btn.clicked.connect(self._on_repeat_custom_steps_dialog)
+        toolbar.addWidget(repeat_btn)
+        
         toolbar.addSpacing(10)
         
         import_btn = QPushButton("Import JSON")
@@ -3021,7 +3210,8 @@ class AutomationPanel(QWidget):
             "Polarizer Power (calibrated)",
             "Move Stage X",
             "Move Stage Y",
-            "Collect Spectrum"
+            "Collect Spectrum",
+            "Repeat / Loop"
         ])
         act_combo.currentIndexChanged.connect(self._on_custom_action_changed)
 
@@ -3089,13 +3279,19 @@ class AutomationPanel(QWidget):
             self.custom_seq_table.setCellWidget(row, 2, spin)
             
         elif action == "Collect Spectrum":
-            lbl = QLabel("[Andor Spectrometer]")
-            lbl.setStyleSheet("color: #7f8c8d; font-style: italic;")
-            self.custom_seq_table.setCellWidget(row, 2, lbl)
+            edit = QLineEdit()
+            edit.setPlaceholderText(f"Prefix (default: step_{row + 1:03d})")
+            self.custom_seq_table.setCellWidget(row, 2, edit)
+
+        elif action == "Repeat / Loop":
+            default_to = max(1, row)
+            total_rows = max(1, self.custom_seq_table.rowCount())
+            loop_widget = LoopParamWidget(from_step=1, to_step=default_to, count=2, max_steps=total_rows)
+            self.custom_seq_table.setCellWidget(row, 2, loop_widget)
 
     def _reindex_custom_steps(self):
-
-        for r in range(self.custom_seq_table.rowCount()):
+        total_rows = self.custom_seq_table.rowCount()
+        for r in range(total_rows):
             item = self.custom_seq_table.item(r, 0)
             if not item:
                 item = QTableWidgetItem()
@@ -3103,6 +3299,13 @@ class AutomationPanel(QWidget):
                 self.custom_seq_table.setItem(r, 0, item)
             item.setData(Qt.ItemDataRole.EditRole, r + 1)
             item.setText(str(r + 1))
+            
+            # Update bounds on LoopParamWidget if present, or placeholder on QLineEdit
+            param_widget = self.custom_seq_table.cellWidget(r, 2)
+            if isinstance(param_widget, LoopParamWidget):
+                param_widget.set_max_steps(total_rows)
+            elif isinstance(param_widget, QLineEdit):
+                param_widget.setPlaceholderText(f"Prefix (default: step_{r + 1:03d})")
 
     def _on_remove_custom_step(self):
         sel_model = self.custom_seq_table.selectionModel()
@@ -3142,6 +3345,15 @@ class AutomationPanel(QWidget):
             params['power_w'] = param_widget.currentData()
         elif action in ("Move Stage X", "Move Stage Y") and isinstance(param_widget, QDoubleSpinBox):
             params['position'] = param_widget.value()
+        elif action == "Repeat / Loop" and isinstance(param_widget, LoopParamWidget):
+            from_s, to_s, cnt = param_widget.get_values()
+            params['from_step'] = from_s
+            params['to_step'] = to_s
+            params['count'] = cnt
+        elif action == "Collect Spectrum" and isinstance(param_widget, QLineEdit):
+            prefix = param_widget.text().strip()
+            if prefix:
+                params['prefix'] = prefix
             
         comment = ""
 
@@ -3173,7 +3385,8 @@ class AutomationPanel(QWidget):
                 "Polarizer Power (calibrated)",
                 "Move Stage X",
                 "Move Stage Y",
-                "Collect Spectrum"
+                "Collect Spectrum",
+                "Repeat / Loop"
             ])
             act_combo.setCurrentText(data['action'])
             act_combo.currentIndexChanged.connect(self._on_custom_action_changed)
@@ -3202,6 +3415,14 @@ class AutomationPanel(QWidget):
                     if idx >= 0: param_widget.setCurrentIndex(idx)
             elif action in ("Move Stage X", "Move Stage Y") and isinstance(param_widget, QDoubleSpinBox):
                 if 'position' in params: param_widget.setValue(params['position'])
+            elif action == "Repeat / Loop" and isinstance(param_widget, LoopParamWidget):
+                from_s = params.get('from_step', 1)
+                to_s = params.get('to_step', 1)
+                cnt = params.get('count', 2)
+                param_widget.set_values(from_s, to_s, cnt)
+            elif action == "Collect Spectrum" and isinstance(param_widget, QLineEdit):
+                if 'prefix' in params:
+                    param_widget.setText(params['prefix'])
                 
             # Comment
 
@@ -3250,6 +3471,80 @@ class AutomationPanel(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to import custom sequence: {e}")
 
+    def _on_repeat_custom_steps_dialog(self):
+        from .sequence_dialog import RepeatCustomStepsDialog
+        total_rows = self.custom_seq_table.rowCount()
+        if total_rows == 0:
+            QMessageBox.information(self, "No Steps", "Please add at least one step to the sequence before configuring a loop.")
+            return
+
+        sel_model = self.custom_seq_table.selectionModel()
+        selected_rows = [r.row() for r in sel_model.selectedRows()] if sel_model is not None else []
+        if selected_rows:
+            sel_from = min(selected_rows) + 1
+            sel_to = max(selected_rows) + 1
+        else:
+            curr = self.custom_seq_table.currentRow()
+            if curr >= 0:
+                sel_from = 1
+                sel_to = curr + 1
+            else:
+                sel_from = 1
+                sel_to = total_rows
+
+        dlg = RepeatCustomStepsDialog(total_rows, sel_from=sel_from, sel_to=sel_to, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        f_step, t_step, count, action_mode = dlg.get_values()
+        if action_mode == "loop_step":
+            insert_row = t_step
+            self.custom_seq_table.insertRow(insert_row)
+            
+            step_item = QTableWidgetItem()
+            step_item.setFlags(step_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.custom_seq_table.setItem(insert_row, 0, step_item)
+            
+            act_combo = QComboBox()
+            act_combo.addItems([
+                "Wait / Stabilize",
+                "Shutter (linked)",
+                "Polarizer Angle",
+                "Polarizer Power (calibrated)",
+                "Move Stage X",
+                "Move Stage Y",
+                "Collect Spectrum",
+                "Repeat / Loop"
+            ])
+            act_combo.setCurrentText("Repeat / Loop")
+            act_combo.currentIndexChanged.connect(self._on_custom_action_changed)
+            self.custom_seq_table.setCellWidget(insert_row, 1, act_combo)
+            
+            loop_widget = LoopParamWidget(f_step, t_step, count, max_steps=self.custom_seq_table.rowCount())
+            self.custom_seq_table.setCellWidget(insert_row, 2, loop_widget)
+            
+            comment_item = QTableWidgetItem(f"Repeat steps {f_step}-{t_step} ({count}x)")
+            self.custom_seq_table.setItem(insert_row, 3, comment_item)
+            
+            self._reindex_custom_steps()
+            
+        elif action_mode == "duplicate":
+            if count <= 1:
+                return
+            
+            rows_to_dup = []
+            for r in range(f_step - 1, t_step):
+                rows_to_dup.append(self._serialize_custom_row(r))
+                
+            insert_pos = t_step
+            for _ in range(count - 1):
+                for row_data in rows_to_dup:
+                    self.custom_seq_table.insertRow(insert_pos)
+                    self._deserialize_custom_row(insert_pos, row_data)
+                    insert_pos += 1
+                    
+            self._reindex_custom_steps()
+
     def get_custom_sequence_steps(self) -> List[Dict[str, Any]]:
         """Retrieve the currently defined custom sequence steps."""
         steps = []
@@ -3290,7 +3585,26 @@ class AutomationPanel(QWidget):
                     params['position'] = pos
                     params_desc = f"{pos:.3f} mm"
             elif action == "Collect Spectrum":
-                params_desc = "Capture Spectrum"
+                if isinstance(param_widget, QLineEdit):
+                    prefix = param_widget.text().strip()
+                    if prefix:
+                        params['prefix'] = prefix
+                        params_desc = f"Prefix: {prefix}"
+                    else:
+                        params_desc = ""
+                else:
+                    params_desc = ""
+            elif action == "Repeat / Loop":
+                if isinstance(param_widget, LoopParamWidget):
+                    from_s, to_s, cnt = param_widget.get_values()
+                else:
+                    from_s = 1
+                    to_s = 1
+                    cnt = 2
+                params['from_step'] = from_s
+                params['to_step'] = to_s
+                params['count'] = cnt
+                params_desc = f"Steps {from_s} to {to_s} ({cnt}x total)"
                 
             # Comment / Label
 

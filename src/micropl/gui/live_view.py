@@ -1001,7 +1001,7 @@ class LiveView(QWidget):
             self._seq_worker.finished.connect(self._on_seq_finished)
             
             # Notify Monitor
-            self.sequence_started.emit(steps, 0.0, 1)
+            self.sequence_started.emit(self._seq_worker.steps, 0.0, 1)
             
             # UI State
             self.run_sequence_btn.setEnabled(False)
@@ -1763,9 +1763,12 @@ class LiveView(QWidget):
             mono = self.hw.mono
             center_wl = mono._center_wavelength if (mono and mono.is_connected()) else 0.0
             
-            # Note: We skip grating in cache key for now as it's expensive to poll.
-            # Usually users change wavelength much more often than gratings.
-            cache_key = (n_pixels, center_wl, unit_mode, spectral_unit, self.hw.pixel_deviation, force_nm)
+            # Include cached grating index in cache key to invalidate when grating changes
+            grating_idx = getattr(self.hw, '_last_grating_idx', None)
+            if grating_idx is None and mono and mono.is_connected():
+                grating_idx = getattr(mono, '_grating_idx', None)
+
+            cache_key = (n_pixels, center_wl, grating_idx, unit_mode, spectral_unit, self.hw.pixel_deviation, force_nm)
             
             if self._spectral_x_cache_key == cache_key and self._spectral_x_cache is not None:
                 return self._spectral_x_cache
@@ -1789,10 +1792,11 @@ class LiveView(QWidget):
 
             # Convert to desired view unit
             final_x = x_nm
+            safe_nm = np.where(x_nm == 0, 1e-9, x_nm)
             if spectral_unit == "meV":
-                final_x = 1239.84193 / x_nm
+                final_x = 1239841.93 / safe_nm
             elif spectral_unit == "cm⁻¹" or spectral_unit == "cm-1":
-                final_x = 1e7 / x_nm
+                final_x = 1e7 / safe_nm
             
             # Update cache
             self._spectral_x_cache = cast(np.ndarray, final_x)

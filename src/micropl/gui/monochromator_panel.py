@@ -289,6 +289,7 @@ class MonochromatorPanel(QWidget):
                 try:
                     # Set grating BEFORE wavelength for better firmware consistency
                     mono.set_grating(default_grating_idx)
+                    self.hw._last_grating_idx = default_grating_idx
                     mono.set_spectral_position(target_wl, target_unit)
                     mono.set_slit_width(default_slit, slit_id=0)
                     mono.set_slit_width(default_slit, slit_id=2)
@@ -461,6 +462,10 @@ class MonochromatorPanel(QWidget):
                 try:
                     mono.set_grating_by_density(density)
                     self._last_grating_val = density
+                    try:
+                        self.hw._last_grating_idx = mono.get_grating()
+                    except Exception:
+                        pass
                     
                     # RE-SEND WAVELENGTH TO ADJUST POSITION
                     # The FHR640 requires the wavelength drive to re-move after a turret switch

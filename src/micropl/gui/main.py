@@ -358,6 +358,7 @@ class MainWindow(QMainWindow):
                             logger.info(f"Applying targets post-homing: Index {default_grating_idx} grating, {default_wl} {target_unit}, {default_slit} um slits")
                             try:
                                 mono.set_grating(default_grating_idx)
+                                self.hw._last_grating_idx = default_grating_idx
                                 mono.set_spectral_position(default_wl, target_unit)
                                 mono.set_slit_width(default_slit, slit_id=0)
                                 mono.set_slit_width(default_slit, slit_id=2)

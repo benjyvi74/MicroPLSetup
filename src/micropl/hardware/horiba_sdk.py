@@ -243,7 +243,7 @@ class HoribaSDKMonochromator(Spectrometer):
         List all monochromators registered with the Jobin Yvon SDK.
 
         Returns:
-            List of (name, unique_id) tuples, e.g. [("IHR 320", "Mono1")].
+            List of (unique_id, model_name) tuples, e.g. [("Mono1", "IHR 320")].
 
         Raises:
             RuntimeError: If pywin32 is not installed or SDK not registered.
@@ -316,7 +316,7 @@ class HoribaSDKMonochromator(Spectrometer):
                         "iHR320: No monochromators found by the SDK. "
                         "Ensure the device is plugged in and the SDK is registered."
                     )
-                self._unique_id = devices[0][1]
+                self._unique_id = devices[0][0]
                 logger.info(f"iHR320: Auto-selected unique_id='{self._unique_id}'")
 
             # Reset the class-level event before connecting
@@ -364,6 +364,7 @@ class HoribaSDKMonochromator(Spectrometer):
             logger.info("iHR320: Opening USB communications...")
             try:
                 self._mono.OpenCommunications()
+                logger.info("iHR320: USB communications opened successfully.")
             except Exception as exc:
                 self._mono = None
                 com_err_str = _format_com_error(exc)
@@ -409,6 +410,7 @@ class HoribaSDKMonochromator(Spectrometer):
                 logger.info("iHR320: Polling motor busy state for initialization...")
                 time.sleep(2.0)
                 start = time.time()
+                last_log = start
                 while True:
                     try:
                         busy = bool(self._mono.IsBusy())
@@ -420,7 +422,12 @@ class HoribaSDKMonochromator(Spectrometer):
                         logger.info("iHR320: Monochromator is idle. Homing complete.")
                         break
 
-                    if time.time() - start > self._init_timeout:
+                    now = time.time()
+                    if now - last_log >= 5.0:
+                        logger.info(f"iHR320: Motor homing in progress... ({int(now - start)}s elapsed)")
+                        last_log = now
+
+                    if now - start > self._init_timeout:
                         raise TimeoutError(
                             f"iHR320: Initialization timed out after {self._init_timeout}s."
                         )
